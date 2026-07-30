@@ -13,6 +13,8 @@ import {
 } from '../lib/pantry'
 import { live } from '../lib/store'
 import { useApp } from '../lib/useApp'
+import { useUndo } from '../lib/useUndo'
+import { UndoBar } from '../components/Undo'
 import type { AisleId, PantryItem } from '../lib/types'
 
 /**
@@ -29,7 +31,8 @@ const FILTERS: { id: PantryFilter; label: string }[] = [
 ]
 
 export function VorratView({ startFilter }: { startFilter?: PantryFilter }) {
-  const { state } = useApp()
+  const { state, dispatch } = useApp()
+  const { undo, dismiss, remove } = useUndo(dispatch)
   const [filter, setFilter] = useState<PantryFilter>(startFilter ?? 'ablauf')
   const [open, setOpen] = useState<PantryItem | null>(null)
   const [creating, setCreating] = useState(false)
@@ -120,8 +123,19 @@ export function VorratView({ startFilter }: { startFilter?: PantryFilter }) {
         )}
       </div>
 
+      <UndoBar state={undo} onDismiss={dismiss} />
+
       {creating && <PantrySheet onClose={() => setCreating(false)} />}
-      {open && <PantrySheet item={open} onClose={() => setOpen(null)} />}
+      {open && (
+        <PantrySheet
+          item={open}
+          onClose={() => setOpen(null)}
+          onDelete={() => {
+            remove('pantryItems', open.id, { type: 'pantry/remove', id: open.id }, `„${open.name}“ gelöscht`)
+            setOpen(null)
+          }}
+        />
+      )}
     </>
   )
 }
@@ -133,7 +147,16 @@ function trimNumber(value: number): string {
 
 /* --- Anlegen und Bearbeiten ----------------------------------------------- */
 
-function PantrySheet({ item, onClose }: { item?: PantryItem; onClose: () => void }) {
+function PantrySheet({
+  item,
+  onClose,
+  onDelete,
+}: {
+  item?: PantryItem
+  onClose: () => void
+  /** Läuft über die Ansicht, weil nur dort der Rückgängig-Streifen lebt. */
+  onDelete?: () => void
+}) {
   const { state, dispatch } = useApp()
   const current = item ? live(state.pantryItems).find((i) => i.id === item.id) ?? item : undefined
 
@@ -142,6 +165,7 @@ function PantrySheet({ item, onClose }: { item?: PantryItem; onClose: () => void
   const [unit, setUnit] = useState(current?.unit ?? 'Stück')
   const [minQty, setMinQty] = useState(String(current?.minQty ?? 0))
   const [bestBefore, setBestBefore] = useState(current?.bestBefore ?? '')
+  const [note, setNote] = useState(current?.note ?? '')
   const [aisleId, setAisleId] = useState<AisleId>(current?.aisle ?? 'sonstiges')
   // Solange niemand die Abteilung von Hand gewählt hat, folgt sie dem Namen.
   const [aisleTouched, setAisleTouched] = useState(Boolean(current))
@@ -161,6 +185,7 @@ function PantrySheet({ item, onClose }: { item?: PantryItem; onClose: () => void
       unit: unit.trim() || 'Stück',
       minQty: parsedMin,
       bestBefore: bestBefore || null,
+      note: note.trim(),
     }
     if (current) dispatch({ type: 'pantry/update', id: current.id, patch: payload })
     else dispatch({ type: 'pantry/add', item: payload })
@@ -172,13 +197,11 @@ function PantrySheet({ item, onClose }: { item?: PantryItem; onClose: () => void
       title={current ? 'Produkt' : 'Produkt anlegen'}
       onClose={onClose}
       action={
-        current && (
+        current &&
+        onDelete && (
           <button
             type="button"
-            onClick={() => {
-              dispatch({ type: 'pantry/remove', id: current.id })
-              onClose()
-            }}
+            onClick={onDelete}
             aria-label="Löschen"
             style={{ width: 40, height: 40, display: 'grid', placeItems: 'center', color: 'var(--bad)' }}
           >
@@ -248,6 +271,16 @@ function PantrySheet({ item, onClose }: { item?: PantryItem; onClose: () => void
           inputMode="decimal"
           value={minQty}
           onChange={(event) => setMinQty(event.target.value)}
+        />
+      </Field>
+
+      <Field label="Notiz (freiwillig)">
+        <input
+          className="input"
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+          placeholder="z. B. steht im Keller"
+          autoCapitalize="sentences"
         />
       </Field>
 

@@ -127,6 +127,13 @@ export interface ShopItem extends Entity {
   addedBy: string
   /** Gesetzt, wenn der Eintrag aus einem Nachkaufen-Vorschlag stammt. */
   pantryId: string | null
+  /** „die im blauen Karton“, „nur die große Packung“. */
+  note: string
+  /**
+   * Was es gekostet hat. Freiwillig – das Abhaken darf nie am Preis hängen.
+   * Beim Abschließen des Einkaufs wird daraus eine Ausgabe.
+   */
+  priceCents: number | null
 }
 
 export interface PantryItem extends Entity {
@@ -139,6 +146,62 @@ export interface PantryItem extends Entity {
   minQty: number
   /** Mindesthaltbarkeitsdatum des ältesten Vorrats. */
   bestBefore: IsoDate | null
+  /** „steht im Keller“, „angebrochen“. */
+  note: string
+}
+
+/** Ein Zettel am Kühlschrank – für alles, was keine Einkaufsliste ist. */
+export interface Note extends Entity {
+  title: string
+  body: string
+  /** Angeheftete Notizen stehen oben. */
+  pinned: boolean
+}
+
+export interface TemplateItem {
+  name: string
+  qty: string
+  aisle: AisleId
+  note: string
+}
+
+/** Ein wiederkehrender Einkauf – „Wocheneinkauf“, „Frühstück“. */
+export interface ShopTemplate extends Entity {
+  name: string
+  emoji: string
+  items: TemplateItem[]
+}
+
+/* --- Wiederkehrende Buchungen --------------------------------------------- */
+
+export type RecurringUnit = 'woche' | 'monat' | 'jahr'
+
+/**
+ * Eine Regel, aus der die App Buchungen erzeugt – Miete, Abos, Gehalt.
+ *
+ * Die Regel selbst ist keine Buchung. Sie merkt sich in `lastRun`, bis wohin
+ * schon gebucht wurde; alles danach wird beim nächsten Start nachgeholt. So
+ * bekommt auch der, der die App zwei Monate nicht öffnet, beide Buchungen –
+ * und keine doppelt.
+ */
+export interface RecurringTx extends Entity {
+  kind: TxKind
+  cents: number
+  categoryId: string
+  note: string
+  unit: RecurringUnit
+  /**
+   * Bei `monat` der Tag im Monat (1–31), bei `woche` der Wochentag (0 = So),
+   * bei `jahr` der Tag im Monat. Der 31. rutscht in kurzen Monaten auf den
+   * Monatsletzten.
+   */
+  anchorDay: number
+  /** Nur bei `jahr` gesetzt: der Monat (1–12). */
+  anchorMonth: number | null
+  startDate: IsoDate
+  /** Letzter Termin, für den bereits gebucht wurde. `null` = noch nie. */
+  lastRun: IsoDate | null
+  active: boolean
 }
 
 /* --- Haushalt ------------------------------------------------------------ */
@@ -175,9 +238,12 @@ export interface State {
   pots: Pot[]
   potEntries: PotEntry[]
   challenges: Challenge[]
+  recurringTxs: RecurringTx[]
   /* geteilt */
   shopItems: ShopItem[]
   pantryItems: PantryItem[]
+  notes: Note[]
+  shopTemplates: ShopTemplate[]
   /**
    * Gelernte Reihenfolge der Abteilungen: kleinerer Wert heißt „kommt im Laden
    * früher“. Wächst aus dem Abhaken beim Einkauf.

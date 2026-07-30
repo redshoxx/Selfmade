@@ -12,6 +12,8 @@ function item(over: Partial<ShopItem> & Pick<ShopItem, 'id' | 'name'>): ShopItem
     done: false,
     addedBy: 'Ich',
     pantryId: null,
+    note: '',
+    priceCents: null,
     ...over,
   }
 }

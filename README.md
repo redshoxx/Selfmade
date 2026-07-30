@@ -10,7 +10,7 @@ Fünf Bereiche, alle in Daumenreichweite:
 | **Start** | Wie steht der Monat, was läuft zu Hause ab, was fehlt beim Einkauf |
 | **Geld** | Einnahmen und Ausgaben mit Kategorien, Monatssaldo, Budgets |
 | **Sparen** | Spartöpfe und Spar-Challenges (1 €, 2 €, 5 € und mehr) |
-| **Einkauf** | Geteilte Liste, sortiert nach dem Weg durch *deinen* Laden |
+| **Einkauf** | Geteilte Liste mit Mengen, Preisen und Notizen, sortiert nach dem Weg durch *deinen* Laden |
 | **Vorrat** | Was zu Hause steht, mit Mindesthaltbarkeitsdatum und Warnung |
 
 Die App ist installierbar (PWA): auf dem iPhone über *Teilen → Zum Home-Bildschirm*,
@@ -28,7 +28,9 @@ Die Trennung ist der Kern des Datenmodells und nicht verhandelbar:
    ─────────────────            ──────────────────────
    Buchungen                    Einkaufsliste
    Spartöpfe                    Vorrat
-   Spar-Challenges              Reihenfolge der Abteilungen
+   Spar-Challenges              Notizzettel
+   Wiederkehrende Buchungen     Einkaufs-Vorlagen
+                                Reihenfolge der Abteilungen
 ```
 
 Wer zusammen einkauft, muss dafür nicht sein Gehalt offenlegen. Die
@@ -53,6 +55,55 @@ Eingetippt wird nur der Name. Die Abteilung errät die App aus rund
 250 Stichwörtern: *Milch* → Kühlregal, *Klopapier* → Haushalt, *Hackfleisch* →
 Fleisch & Fisch. Deutsche Zusammensetzungen gehören dazu, deshalb landet auch
 *Vollmilch* im Kühlregal. Sitzt der Vorschlag daneben, ändert ihn ein Tipp.
+
+### Menge und Name in einem Feld
+
+„2 Milch“ genügt – die App trennt beides selbst:
+
+| getippt | Name | Menge |
+| --- | --- | --- |
+| `2 Milch` | Milch | 2 |
+| `500g Mehl` | Mehl | 500 g |
+| `1,5 l Saft` | Saft | 1,5 l |
+| `3x Joghurt` | Joghurt | 3 |
+| `Mehl 500 g` | Mehl | 500 g |
+
+Was nur nach einer Menge aussieht, bleibt Teil des Namens: *H-Milch 3,5 %*,
+*Vitamin B12*, *Cola Zero*. Eine falsch erkannte Menge ist schlimmer als gar
+keine – sie verstümmelt den Namen, und das fällt erst im Laden auf.
+
+Steht die Ware schon auf der Liste, werden die Mengen **zusammengezählt**:
+aus „2 Milch“ und später „3 Milch“ wird eine Zeile mit 5. Zwei Zeilen „Milch“
+helfen im Laden niemandem. Feinjustieren lässt sich die Menge mit einem Tipp
+darauf – dann erscheinen − und +.
+
+### Preise beim Einkauf
+
+Abgehakte Einträge bekommen ein unaufdringliches „+ €“. Wer mag, tippt den
+Preis ein; beim **Einkauf fertig** zeigt die App die Summe und bucht sie auf
+Bestätigung als Ausgabe. So sieht man, was der Wocheneinkauf wirklich kostet,
+ohne den Kassenzettel abzutippen. Das Abhaken selbst bleibt ein einziger Tipp –
+der Preis ist nie Pflicht.
+
+### Vorlagen
+
+Der Wocheneinkauf ist jede Woche derselbe. **Aktuelle Liste sichern** nimmt die
+offenen Einträge samt Menge, Abteilung und Notiz auf; später holt ein Tipp sie
+zurück. Was schon draufsteht, wird auch hier zusammengezählt statt verdoppelt.
+
+### Notizen
+
+Jeder Eintrag kann eine Notiz tragen – „die im blauen Karton“, „nur die große
+Packung“ –, sichtbar für alle im Haushalt. Daneben gibt es unter *Einkauf →
+Notizen* einen geteilten Zettel für alles, was keine Einkaufsliste ist:
+Rezepte, Maße, Erinnerungen. Angeheftetes steht oben.
+
+### Verschrieben? Rückgängig
+
+Löschen fragt nicht nach, sondern lässt sich zurücknehmen: Nach jedem Löschen
+steht sieben Sekunden lang „Rückgängig“ über der Reiterleiste. Eine Rückfrage
+bremst jedes Mal, ein Rückgängig nur im Fehlerfall. Auf dem Telefon geht das
+auch per Wischen nach links.
 
 ---
 
@@ -135,6 +186,20 @@ Zwei Dinge nimmt die App bewusst in die Hand:
   und „Speichern“ bliebe für immer grau. Ein Aufräumen darf die App nicht
   unbenutzbar machen.
 
+### Wiederkehrende Buchungen
+
+Miete, Abos und Gehalt legt man unter *Geld → Wiederkehrend* einmal an; danach
+bucht die App sie von selbst – wöchentlich, monatlich oder jährlich.
+
+Die Regel merkt sich, bis wohin schon gebucht wurde. Wer die App zwei Monate
+nicht öffnet, bekommt beim nächsten Start **beide** Buchungen nachgetragen, und
+keine doppelt. Liegt der Beginn in der Vergangenheit, wird rückwirkend
+nachgeholt.
+
+Den 31. gibt es nicht in jedem Monat: Wer zum Monatsende bucht, bekommt im
+Februar den 28. bzw. 29. Gerechnet wird über ganze Tage, nie über
+Millisekunden – sonst stünde die Miete nach der Zeitumstellung am falschen Tag.
+
 ---
 
 ## Zu zweit nutzen – Supabase einrichten
@@ -210,7 +275,7 @@ steht in der Monatssumme ein Cent, den niemand erklären kann.
 ```sh
 npm install
 npm run dev        # Entwicklungsserver auf Port 5173
-npm test           # 138 Tests
+npm test           # 188 Tests
 npm run typecheck
 npm run build      # Produktionsbündel nach dist/
 npm run build:single  # alles in einer HTML-Datei, nach dist-single/
@@ -240,6 +305,8 @@ src/
     pantry.ts       Ablauf-Ampel, Nachkaufen-Vorschläge
     finance.ts      Monatssummen, Kategorien, Budgets, Spartöpfe
     challenges.ts   Challenge-Engine, Vorlagen, Fortschritt
+    quantity.ts     Menge und Name trennen, zusammenzählen, hoch- und runterzählen
+    recurring.ts    Fällige Termine wiederkehrender Buchungen
     sync.ts         Übersetzung Datenbank ↔ App, Hoch- und Runterladen
     useApp.tsx      Zustand, Anmeldung und Abgleich als Kontext
   views/            Ein Bereich je Datei
@@ -249,7 +316,7 @@ supabase/
 ```
 
 Die Rechenlogik liegt vollständig in `lib/` und ist ohne Oberfläche testbar –
-alle 138 Tests laufen ohne Browser. Was in den Views steht, ist Darstellung.
+alle 188 Tests laufen ohne Browser. Was in den Views steht, ist Darstellung.
 
 ### Auf dem Telefon
 

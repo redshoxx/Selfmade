@@ -109,6 +109,46 @@ create table if not exists public.aisle_order (
   primary key (household_id, aisle)
 );
 
+-- Notizzettel des Haushalts – für alles, was keine Einkaufsliste ist.
+create table if not exists public.notes (
+  id           uuid primary key,
+  household_id uuid not null references public.households (id) on delete cascade,
+  title        text not null default '',
+  body         text not null default '',
+  pinned       boolean not null default false,
+  updated_at   bigint not null,
+  deleted_at   bigint
+);
+
+create index if not exists notes_household_idx on public.notes (household_id, updated_at);
+
+-- Einkaufs-Vorlagen. Die Einträge liegen als JSON in einer Spalte: Sie werden
+-- immer vollständig gelesen und geschrieben, nie einzeln abgefragt – eine
+-- eigene Tabelle mit Fremdschlüssel brächte hier nur Verwaltungsaufwand.
+create table if not exists public.shop_templates (
+  id           uuid primary key,
+  household_id uuid not null references public.households (id) on delete cascade,
+  name         text not null,
+  emoji        text not null default '🛒',
+  items        jsonb not null default '[]'::jsonb,
+  updated_at   bigint not null,
+  deleted_at   bigint
+);
+
+create index if not exists shop_templates_household_idx on public.shop_templates (household_id);
+
+-- ---------------------------------------------------------------------------
+--  Nachträglich ergänzte Spalten
+--
+--  Getrennt aufgeführt, damit ein bereits eingespieltes Schema mitwächst,
+--  ohne dass jemand seine Daten neu anlegen muss. `if not exists` macht das
+--  Skript beliebig oft wiederholbar.
+-- ---------------------------------------------------------------------------
+
+alter table public.shop_items   add column if not exists note text not null default '';
+alter table public.shop_items   add column if not exists price_cents bigint;
+alter table public.pantry_items add column if not exists note text not null default '';
+
 -- ---------------------------------------------------------------------------
 --  Privat: Buchungen, Spartöpfe, Challenges
 -- ---------------------------------------------------------------------------
@@ -177,6 +217,27 @@ create table if not exists public.challenges (
 
 create index if not exists challenges_user_idx on public.challenges (user_id);
 
+-- Regeln für wiederkehrende Buchungen. Die Regel selbst ist keine Buchung –
+-- sie merkt sich in `last_run`, bis wohin schon gebucht wurde.
+create table if not exists public.recurring_txs (
+  id           uuid primary key,
+  user_id      uuid not null references auth.users (id) on delete cascade,
+  kind         text not null check (kind in ('einnahme', 'ausgabe')),
+  cents        bigint not null check (cents > 0),
+  category_id  text not null,
+  note         text not null default '',
+  unit         text not null check (unit in ('woche', 'monat', 'jahr')),
+  anchor_day   integer not null default 1 check (anchor_day between 0 and 31),
+  anchor_month integer check (anchor_month is null or anchor_month between 1 and 12),
+  start_date   date not null,
+  last_run     date,
+  active       boolean not null default true,
+  updated_at   bigint not null,
+  deleted_at   bigint
+);
+
+create index if not exists recurring_txs_user_idx on public.recurring_txs (user_id);
+
 -- ---------------------------------------------------------------------------
 --  Zeilenschutz
 --
@@ -187,12 +248,15 @@ create index if not exists challenges_user_idx on public.challenges (user_id);
 alter table public.households        enable row level security;
 alter table public.household_members enable row level security;
 alter table public.shop_items        enable row level security;
+alter table public.notes             enable row level security;
+alter table public.shop_templates    enable row level security;
 alter table public.pantry_items      enable row level security;
 alter table public.aisle_order       enable row level security;
 alter table public.txs               enable row level security;
 alter table public.pots              enable row level security;
 alter table public.pot_entries       enable row level security;
 alter table public.challenges        enable row level security;
+alter table public.recurring_txs     enable row level security;
 
 -- Haushalte: sichtbar für Mitglieder, anlegen darf jeder für sich selbst.
 drop policy if exists households_select on public.households;
@@ -248,7 +312,7 @@ do $$
 declare
   t text;
 begin
-  foreach t in array array['shop_items', 'pantry_items', 'aisle_order'] loop
+  foreach t in array array['shop_items', 'pantry_items', 'aisle_order', 'notes', 'shop_templates'] loop
     execute format('drop policy if exists %I_all on public.%I', t, t);
     execute format(
       'create policy %I_all on public.%I for all to authenticated
@@ -265,7 +329,7 @@ do $$
 declare
   t text;
 begin
-  foreach t in array array['txs', 'pots', 'pot_entries', 'challenges'] loop
+  foreach t in array array['txs', 'pots', 'pot_entries', 'challenges', 'recurring_txs'] loop
     execute format('drop policy if exists %I_all on public.%I', t, t);
     execute format(
       'create policy %I_all on public.%I for all to authenticated
@@ -368,6 +432,20 @@ begin
     where pubname = 'supabase_realtime' and tablename = 'pantry_items'
   ) then
     alter publication supabase_realtime add table public.pantry_items;
+  end if;
+
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'notes'
+  ) then
+    alter publication supabase_realtime add table public.notes;
+  end if;
+
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'shop_templates'
+  ) then
+    alter publication supabase_realtime add table public.shop_templates;
   end if;
 end;
 $$;

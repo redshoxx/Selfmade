@@ -279,7 +279,7 @@ describe('Einkauf', () => {
   function withItem(state: State, name: string): State {
     return reducer(state, {
       type: 'shop/add',
-      item: { name, qty: '', aisle: 'kuehl', done: false, addedBy: 'Ich', pantryId: null },
+      item: { name, qty: '', aisle: 'kuehl', done: false, addedBy: 'Ich', pantryId: null, note: '', priceCents: null },
     })
   }
 
@@ -325,6 +325,8 @@ describe('mergeState', () => {
     done: false,
     addedBy: 'Ich',
     pantryId: null,
+    note: '',
+    priceCents: null,
     ...over,
   })
 
@@ -405,6 +407,35 @@ describe('loadState', () => {
     expect(loadState(raw).challenges[0]!.filled).toEqual([1, 3])
   })
 
+  it('behält Einträge aus einer früheren Fassung der App', () => {
+    // So sah ein gespeicherter Einkaufszettel aus, bevor es Notizen und Preise
+    // gab. Solche Einträge dürfen nicht verschwinden – sie sind in Ordnung,
+    // nur älter. Die fehlenden Felder werden ergänzt.
+    const alt = JSON.stringify({
+      shopItems: [
+        { id: 'alt1', updatedAt: 1, deletedAt: null, name: 'Milch', qty: '2', aisle: 'kuehl', done: false, addedBy: 'Ich', pantryId: null },
+      ],
+      pantryItems: [
+        { id: 'alt2', updatedAt: 1, deletedAt: null, name: 'Mehl', aisle: 'trocken', qty: 1, unit: 'kg', minQty: 0, bestBefore: null },
+      ],
+    })
+    const state = loadState(alt)
+
+    expect(state.shopItems).toHaveLength(1)
+    expect(state.shopItems[0]!.name).toBe('Milch')
+    expect(state.shopItems[0]!.qty).toBe('2')
+    expect(state.shopItems[0]!.note).toBe('')
+    expect(state.shopItems[0]!.priceCents).toBeNull()
+
+    expect(state.pantryItems).toHaveLength(1)
+    expect(state.pantryItems[0]!.note).toBe('')
+
+    // Die neuen Listen fehlen in alten Ständen – dann eben leer, nicht kaputt.
+    expect(state.notes).toEqual([])
+    expect(state.shopTemplates).toEqual([])
+    expect(state.recurringTxs).toEqual([])
+  })
+
   it('fällt bei leerer Kategorienliste auf die Startkategorien zurück', () => {
     // Ohne Kategorien ließe sich keine Buchung erfassen.
     expect(loadState(JSON.stringify({ categories: [] })).categories.length).toBeGreaterThan(0)
@@ -429,6 +460,7 @@ describe('loadState', () => {
       unit: 'l',
       minQty: 1,
       bestBefore: '2026-03-20',
+      note: '',
     }
     const pot: Pot = { id: 'pot1', updatedAt: 5, deletedAt: null, name: 'Urlaub', emoji: '🏖️', targetCents: 50000, targetDate: null }
     const state = loadState(

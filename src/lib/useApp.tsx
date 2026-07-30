@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from 'react'
 import { newInviteCode } from './id'
+import { pendingRuns } from './recurring'
 import { initialState, readStoredState, reducer, writeStoredState, type Action } from './store'
 import { cloudConfigured, redirectTo, supabase } from './supabase'
 import {
@@ -270,6 +271,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'sync/merge', incoming })
     })
   }, [session, state.household?.id])
+
+  /* --- Wiederkehrende Buchungen nachholen --- */
+
+  useEffect(() => {
+    // Einmal beim Start und danach nur, wenn sich die Regeln ändern. Der
+    // Zustand selbst darf hier nicht in der Abhängigkeitsliste stehen: Jede
+    // erzeugte Buchung ändert ihn, und die Wirkung liefe endlos im Kreis.
+    for (const run of pendingRuns({ recurringTxs: stateRef.current.recurringTxs })) {
+      dispatch({ type: 'recurring/run', id: run.id, dates: run.dates })
+    }
+  }, [state.recurringTxs])
 
   /* --- Farbschema --- */
 

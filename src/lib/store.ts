@@ -7,11 +7,14 @@ import type {
   Challenge,
   Entity,
   Household,
+  Note,
   PantryItem,
   Pot,
   PotEntry,
+  RecurringTx,
   Settings,
   ShopItem,
+  ShopTemplate,
   State,
   Tx,
 } from './types'
@@ -59,8 +62,11 @@ export function initialState(): State {
     pots: [],
     potEntries: [],
     challenges: [],
+    recurringTxs: [],
     shopItems: [],
     pantryItems: [],
+    notes: [],
+    shopTemplates: [],
     aisleOrder: {},
     settings: { ...DEFAULT_SETTINGS },
     household: null,
@@ -106,10 +112,43 @@ export type Action =
   | { type: 'pantry/add'; item: Omit<PantryItem, keyof Entity> }
   | { type: 'pantry/update'; id: string; patch: Partial<Omit<PantryItem, keyof Entity>> }
   | { type: 'pantry/remove'; id: string }
+  | { type: 'note/add'; note: Omit<Note, keyof Entity> }
+  | { type: 'note/update'; id: string; patch: Partial<Omit<Note, keyof Entity>> }
+  | { type: 'note/remove'; id: string }
+  | { type: 'template/add'; template: Omit<ShopTemplate, keyof Entity> }
+  | { type: 'template/update'; id: string; patch: Partial<Omit<ShopTemplate, keyof Entity>> }
+  | { type: 'template/remove'; id: string }
+  | { type: 'recurring/add'; rule: Omit<RecurringTx, keyof Entity> }
+  | { type: 'recurring/update'; id: string; patch: Partial<Omit<RecurringTx, keyof Entity>> }
+  | { type: 'recurring/remove'; id: string }
+  /**
+   * Fällige Buchungen einer Regel in einem Zug anlegen und `lastRun`
+   * nachziehen. Beides muss zusammen passieren – sonst entstünden beim
+   * nächsten Start dieselben Buchungen ein zweites Mal.
+   */
+  | { type: 'recurring/run'; id: string; dates: string[] }
+  /**
+   * Einen Grabstein zurücknehmen. Weil Gelöschtes nur markiert und nicht
+   * entfernt wird, genügt dafür ein Zurücksetzen von `deletedAt` – es braucht
+   * keinen Zwischenspeicher irgendwo neben dem Zustand.
+   */
+  | { type: 'undo/restore'; list: UndoableList; ids: string[] }
   | { type: 'settings/update'; patch: Partial<Settings> }
   | { type: 'household/set'; household: Household | null }
   | { type: 'sync/merge'; incoming: Partial<State> }
   | { type: 'state/replace'; state: State }
+
+/** Listen, aus denen sich ein Löschen zurücknehmen lässt. */
+export type UndoableList =
+  | 'txs'
+  | 'pots'
+  | 'potEntries'
+  | 'challenges'
+  | 'recurringTxs'
+  | 'shopItems'
+  | 'pantryItems'
+  | 'notes'
+  | 'shopTemplates'
 
 /** Neue Felder für einen frisch angelegten Datensatz. */
 function stamp(): Entity {
@@ -355,6 +394,79 @@ export function reducer(state: State, action: Action): State {
       return pantryItems === state.pantryItems ? state : { ...state, pantryItems }
     }
 
+    /* --- Notizen --- */
+    case 'note/add':
+      return { ...state, notes: [{ ...action.note, ...stamp() }, ...state.notes] }
+    case 'note/update': {
+      const notes = patchItem(state.notes, action.id, action.patch)
+      return notes === state.notes ? state : { ...state, notes }
+    }
+    case 'note/remove': {
+      const notes = tombstone(state.notes, action.id)
+      return notes === state.notes ? state : { ...state, notes }
+    }
+
+    /* --- Einkaufs-Vorlagen --- */
+    case 'template/add':
+      return { ...state, shopTemplates: [...state.shopTemplates, { ...action.template, ...stamp() }] }
+    case 'template/update': {
+      const shopTemplates = patchItem(state.shopTemplates, action.id, action.patch)
+      return shopTemplates === state.shopTemplates ? state : { ...state, shopTemplates }
+    }
+    case 'template/remove': {
+      const shopTemplates = tombstone(state.shopTemplates, action.id)
+      return shopTemplates === state.shopTemplates ? state : { ...state, shopTemplates }
+    }
+
+    /* --- Wiederkehrende Buchungen --- */
+    case 'recurring/add':
+      return { ...state, recurringTxs: [...state.recurringTxs, { ...action.rule, ...stamp() }] }
+    case 'recurring/update': {
+      const recurringTxs = patchItem(state.recurringTxs, action.id, action.patch)
+      return recurringTxs === state.recurringTxs ? state : { ...state, recurringTxs }
+    }
+    case 'recurring/remove': {
+      const recurringTxs = tombstone(state.recurringTxs, action.id)
+      return recurringTxs === state.recurringTxs ? state : { ...state, recurringTxs }
+    }
+    case 'recurring/run': {
+      const rule = state.recurringTxs.find((r) => r.id === action.id)
+      if (!rule || rule.deletedAt !== null || action.dates.length === 0) return state
+
+      const fresh: Tx[] = action.dates.map((date) => ({
+        ...stamp(),
+        kind: rule.kind,
+        cents: rule.cents,
+        categoryId: rule.categoryId,
+        note: rule.note,
+        date,
+        recurring: true,
+      }))
+      // `lastRun` im selben Schritt setzen: Stünde es in einer eigenen Aktion,
+      // ergäbe ein Abbruch dazwischen doppelte Buchungen.
+      const latest = action.dates[action.dates.length - 1]!
+      return {
+        ...state,
+        txs: [...fresh, ...state.txs],
+        recurringTxs: patchItem(state.recurringTxs, action.id, { lastRun: latest }),
+      }
+    }
+
+    /* --- Rückgängig --- */
+    case 'undo/restore': {
+      const ids = new Set(action.ids)
+      const list = state[action.list]
+      let changed = false
+      const next = (list as readonly Entity[]).map((item) => {
+        if (!ids.has(item.id) || item.deletedAt === null) return item
+        changed = true
+        // Frischer Zeitstempel, damit die Rücknahme beim Abgleich gegen den
+        // Grabstein gewinnt – sonst holte der Server ihn gleich wieder.
+        return { ...item, deletedAt: null, updatedAt: Date.now() }
+      })
+      return changed ? { ...state, [action.list]: next } : state
+    }
+
     /* --- Rahmen --- */
     case 'settings/update':
       return { ...state, settings: { ...state.settings, ...action.patch } }
@@ -412,8 +524,11 @@ export function mergeState(state: State, incoming: Partial<State>): State {
     pots: mergeList(state.pots, incoming.pots),
     potEntries: mergeList(state.potEntries, incoming.potEntries),
     challenges: mergeList(state.challenges, incoming.challenges),
+    recurringTxs: mergeList(state.recurringTxs, incoming.recurringTxs),
     shopItems: mergeList(state.shopItems, incoming.shopItems),
     pantryItems: mergeList(state.pantryItems, incoming.pantryItems),
+    notes: mergeList(state.notes, incoming.notes),
+    shopTemplates: mergeList(state.shopTemplates, incoming.shopTemplates),
     categories: incoming.categories ?? state.categories,
     aisleOrder: { ...state.aisleOrder, ...incoming.aisleOrder },
     household: incoming.household ?? state.household,
@@ -454,7 +569,19 @@ export function loadState(raw: string | null): State {
     )
   }
 
-  const list = <T>(key: string, ok: (item: Record<string, unknown>) => boolean): T[] => {
+  /**
+   * @param ok   Mindestanforderung – was hier durchfällt, ist unbrauchbar.
+   * @param fill Ergänzt Felder, die es in einer früheren Fassung der App noch
+   *             nicht gab. Ohne das trüge ein gespeicherter Einkaufszettel
+   *             kein `note`, und der erste Zugriff darauf liefe ins Leere.
+   *             Solche Einträge deshalb auffüllen statt verwerfen – sie sind
+   *             in Ordnung, nur älter.
+   */
+  const list = <T>(
+    key: string,
+    ok: (item: Record<string, unknown>) => boolean,
+    fill?: (item: Record<string, unknown>) => Partial<T>,
+  ): T[] => {
     const value = data[key]
     if (!Array.isArray(value)) return []
     const seen = new Set<string>()
@@ -464,7 +591,7 @@ export function loadState(raw: string | null): State {
       const id = item.id as string
       if (seen.has(id)) continue // doppelte Kennungen brächen jede Liste
       seen.add(id)
-      out.push(item as T)
+      out.push(fill ? ({ ...item, ...fill(item) } as T) : (item as T))
     }
     return out
   }
@@ -487,8 +614,57 @@ export function loadState(raw: string | null): State {
         (i.slots as number) > 0 &&
         Array.isArray(i.filled),
     ),
-    shopItems: list<ShopItem>('shopItems', (i) => text(i.name) && typeof i.done === 'boolean'),
-    pantryItems: list<PantryItem>('pantryItems', (i) => text(i.name) && num(i.qty)),
+    recurringTxs: list<RecurringTx>(
+      'recurringTxs',
+      (i) =>
+        isValidCents(i.cents) &&
+        i.cents > 0 &&
+        text(i.categoryId) &&
+        text(i.startDate) &&
+        (i.kind === 'einnahme' || i.kind === 'ausgabe') &&
+        (i.unit === 'woche' || i.unit === 'monat' || i.unit === 'jahr'),
+      (i) => ({
+        note: text(i.note) ? (i.note as string) : '',
+        anchorDay: num(i.anchorDay) ? (i.anchorDay as number) : 1,
+        anchorMonth: num(i.anchorMonth) ? (i.anchorMonth as number) : null,
+        lastRun: text(i.lastRun) ? (i.lastRun as string) : null,
+        active: i.active !== false,
+      }),
+    ),
+    shopItems: list<ShopItem>(
+      'shopItems',
+      (i) => text(i.name) && typeof i.done === 'boolean',
+      (i) => ({
+        qty: text(i.qty) ? (i.qty as string) : '',
+        note: text(i.note) ? (i.note as string) : '',
+        priceCents: isValidCents(i.priceCents) ? (i.priceCents as number) : null,
+      }),
+    ),
+    pantryItems: list<PantryItem>('pantryItems', (i) => text(i.name) && num(i.qty), (i) => ({
+      note: text(i.note) ? (i.note as string) : '',
+    })),
+    notes: list<Note>('notes', (i) => text(i.title) || text(i.body), (i) => ({
+      title: text(i.title) ? (i.title as string) : '',
+      body: text(i.body) ? (i.body as string) : '',
+      pinned: i.pinned === true,
+    })),
+    shopTemplates: list<ShopTemplate>(
+      'shopTemplates',
+      (i) => text(i.name) && Array.isArray(i.items),
+      (i) => ({
+        emoji: text(i.emoji) ? (i.emoji as string) : '🛒',
+        items: (i.items as unknown[])
+          .filter((entry): entry is Record<string, unknown> => {
+            return !!entry && typeof entry === 'object' && typeof (entry as Record<string, unknown>).name === 'string'
+          })
+          .map((entry) => ({
+            name: entry.name as string,
+            qty: typeof entry.qty === 'string' ? entry.qty : '',
+            aisle: (typeof entry.aisle === 'string' ? entry.aisle : 'sonstiges') as AisleId,
+            note: typeof entry.note === 'string' ? entry.note : '',
+          })),
+      }),
+    ),
   }
 
   // Challenge-Felder säubern: nur Zahlen im gültigen Bereich, ohne Dubletten.

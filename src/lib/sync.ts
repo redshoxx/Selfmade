@@ -3,10 +3,13 @@ import type {
   AisleId,
   Challenge,
   Household,
+  Note,
   PantryItem,
   Pot,
   PotEntry,
+  RecurringTx,
   ShopItem,
+  ShopTemplate,
   State,
   Tx,
 } from './types'
@@ -50,6 +53,8 @@ function shopFromRow(row: Row): ShopItem {
     done: asBool(row.done),
     addedBy: asText(row.added_by),
     pantryId: asNullText(row.pantry_id),
+    note: asText(row.note),
+    priceCents: asNullNum(row.price_cents),
     updatedAt: asNum(row.updated_at),
     deletedAt: asNullNum(row.deleted_at),
   }
@@ -65,6 +70,8 @@ function shopToRow(item: ShopItem, householdId: string): Row {
     done: item.done,
     added_by: item.addedBy,
     pantry_id: item.pantryId,
+    note: item.note,
+    price_cents: item.priceCents,
     updated_at: item.updatedAt,
     deleted_at: item.deletedAt,
   }
@@ -79,6 +86,7 @@ function pantryFromRow(row: Row): PantryItem {
     unit: asText(row.unit, 'Stück'),
     minQty: asNum(row.min_qty),
     bestBefore: asNullText(row.best_before),
+    note: asText(row.note),
     updatedAt: asNum(row.updated_at),
     deletedAt: asNullNum(row.deleted_at),
   }
@@ -94,8 +102,106 @@ function pantryToRow(item: PantryItem, householdId: string): Row {
     unit: item.unit,
     min_qty: item.minQty,
     best_before: item.bestBefore,
+    note: item.note,
     updated_at: item.updatedAt,
     deleted_at: item.deletedAt,
+  }
+}
+
+/* --- Notizen, Vorlagen, wiederkehrende Buchungen -------------------------- */
+
+function noteFromRow(row: Row): Note {
+  return {
+    id: asText(row.id),
+    title: asText(row.title),
+    body: asText(row.body),
+    pinned: asBool(row.pinned),
+    updatedAt: asNum(row.updated_at),
+    deletedAt: asNullNum(row.deleted_at),
+  }
+}
+
+function noteToRow(note: Note, householdId: string): Row {
+  return {
+    id: note.id,
+    household_id: householdId,
+    title: note.title,
+    body: note.body,
+    pinned: note.pinned,
+    updated_at: note.updatedAt,
+    deleted_at: note.deletedAt,
+  }
+}
+
+function templateFromRow(row: Row): ShopTemplate {
+  const raw = Array.isArray(row.items) ? (row.items as unknown[]) : []
+  return {
+    id: asText(row.id),
+    name: asText(row.name),
+    emoji: asText(row.emoji, '🛒'),
+    // Die Einträge liegen als JSON in einer Spalte. Was dort nicht passt,
+    // fliegt raus – eine kaputte Vorlage darf nicht den ganzen Abgleich kippen.
+    items: raw
+      .filter((entry): entry is Row => !!entry && typeof entry === 'object')
+      .map((entry) => ({
+        name: asText(entry.name),
+        qty: asText(entry.qty),
+        aisle: asText(entry.aisle, 'sonstiges') as AisleId,
+        note: asText(entry.note),
+      }))
+      .filter((entry) => entry.name !== ''),
+    updatedAt: asNum(row.updated_at),
+    deletedAt: asNullNum(row.deleted_at),
+  }
+}
+
+function templateToRow(template: ShopTemplate, householdId: string): Row {
+  return {
+    id: template.id,
+    household_id: householdId,
+    name: template.name,
+    emoji: template.emoji,
+    items: template.items,
+    updated_at: template.updatedAt,
+    deleted_at: template.deletedAt,
+  }
+}
+
+function recurringFromRow(row: Row): RecurringTx {
+  const unit = row.unit
+  return {
+    id: asText(row.id),
+    kind: row.kind === 'einnahme' ? 'einnahme' : 'ausgabe',
+    cents: asNum(row.cents),
+    categoryId: asText(row.category_id),
+    note: asText(row.note),
+    unit: unit === 'woche' || unit === 'jahr' ? unit : 'monat',
+    anchorDay: asNum(row.anchor_day, 1),
+    anchorMonth: asNullNum(row.anchor_month),
+    startDate: asText(row.start_date),
+    lastRun: asNullText(row.last_run),
+    active: row.active !== false,
+    updatedAt: asNum(row.updated_at),
+    deletedAt: asNullNum(row.deleted_at),
+  }
+}
+
+function recurringToRow(rule: RecurringTx, userId: string): Row {
+  return {
+    id: rule.id,
+    user_id: userId,
+    kind: rule.kind,
+    cents: rule.cents,
+    category_id: rule.categoryId,
+    note: rule.note,
+    unit: rule.unit,
+    anchor_day: rule.anchorDay,
+    anchor_month: rule.anchorMonth,
+    start_date: rule.startDate,
+    last_run: rule.lastRun,
+    active: rule.active,
+    updated_at: rule.updatedAt,
+    deleted_at: rule.deletedAt,
   }
 }
 
@@ -231,6 +337,12 @@ export const rowCodecs = {
   potEntryToRow,
   challengeFromRow,
   challengeToRow,
+  noteFromRow,
+  noteToRow,
+  templateFromRow,
+  templateToRow,
+  recurringFromRow,
+  recurringToRow,
 }
 
 /* --- Haushalt -------------------------------------------------------------- */
@@ -328,6 +440,7 @@ export async function pullAll(
     client.from('pots').select('*').eq('user_id', args.userId),
     client.from('pot_entries').select('*').eq('user_id', args.userId),
     client.from('challenges').select('*').eq('user_id', args.userId),
+    client.from('recurring_txs').select('*').eq('user_id', args.userId),
   ])
 
   const geteilt = args.householdId
@@ -335,22 +448,27 @@ export async function pullAll(
         client.from('shop_items').select('*').eq('household_id', args.householdId),
         client.from('pantry_items').select('*').eq('household_id', args.householdId),
         client.from('aisle_order').select('*').eq('household_id', args.householdId),
+        client.from('notes').select('*').eq('household_id', args.householdId),
+        client.from('shop_templates').select('*').eq('household_id', args.householdId),
       ])
     : Promise.resolve(null)
 
-  const [[txs, pots, potEntries, challenges], shared] = await Promise.all([privat, geteilt])
+  const [[txs, pots, potEntries, challenges, recurring], shared] = await Promise.all([privat, geteilt])
 
   const incoming: Partial<State> = {
     txs: ((txs.data ?? []) as Row[]).map(txFromRow),
     pots: ((pots.data ?? []) as Row[]).map(potFromRow),
     potEntries: ((potEntries.data ?? []) as Row[]).map(potEntryFromRow),
     challenges: ((challenges.data ?? []) as Row[]).map(challengeFromRow),
+    recurringTxs: ((recurring.data ?? []) as Row[]).map(recurringFromRow),
   }
 
   if (shared) {
-    const [shopItems, pantryItems, aisleOrder] = shared
+    const [shopItems, pantryItems, aisleOrder, notes, templates] = shared
     incoming.shopItems = ((shopItems.data ?? []) as Row[]).map(shopFromRow)
     incoming.pantryItems = ((pantryItems.data ?? []) as Row[]).map(pantryFromRow)
+    incoming.notes = ((notes.data ?? []) as Row[]).map(noteFromRow)
+    incoming.shopTemplates = ((templates.data ?? []) as Row[]).map(templateFromRow)
 
     const order: Partial<Record<AisleId, number>> = {}
     for (const row of (aisleOrder.data ?? []) as Row[]) {
@@ -387,10 +505,13 @@ export async function pushChanges(
   push('pots', neuer(state.pots).map((pot) => potToRow(pot, userId)))
   push('pot_entries', neuer(state.potEntries).map((entry) => potEntryToRow(entry, userId)))
   push('challenges', neuer(state.challenges).map((c) => challengeToRow(c, userId)))
+  push('recurring_txs', neuer(state.recurringTxs).map((r) => recurringToRow(r, userId)))
 
   if (householdId) {
     push('shop_items', neuer(state.shopItems).map((item) => shopToRow(item, householdId)))
     push('pantry_items', neuer(state.pantryItems).map((item) => pantryToRow(item, householdId)))
+    push('notes', neuer(state.notes).map((note) => noteToRow(note, householdId)))
+    push('shop_templates', neuer(state.shopTemplates).map((t) => templateToRow(t, householdId)))
 
     const order = Object.entries(state.aisleOrder)
       .filter(([, rank]) => typeof rank === 'number')

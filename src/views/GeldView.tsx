@@ -15,8 +15,11 @@ import {
 import { formatMoney, formatSigned } from '../lib/money'
 import { live } from '../lib/store'
 import { useApp } from '../lib/useApp'
+import { useUndo } from '../lib/useUndo'
+import { UndoBar } from '../components/Undo'
 import type { Tx, TxKind } from '../lib/types'
 import { KategorienSheet } from './KategorienSheet'
+import { WiederkehrendSheet } from './WiederkehrendSheet'
 
 /**
  * Einnahmen und Ausgaben.
@@ -26,11 +29,13 @@ import { KategorienSheet } from './KategorienSheet'
  * Ausgaben über den Tag erinnert, nicht über die Kategorie.
  */
 export function GeldView({ startCompose }: { startCompose?: TxKind | null }) {
-  const { state } = useApp()
+  const { state, dispatch } = useApp()
+  const { undo, dismiss, remove } = useUndo(dispatch)
   const [month, setMonth] = useState(currentMonth())
   const [compose, setCompose] = useState<TxKind | null>(startCompose ?? null)
   const [edit, setEdit] = useState<Tx | null>(null)
   const [managing, setManaging] = useState(false)
+  const [recurring, setRecurring] = useState(false)
 
   const summary = useMemo(() => summarizeMonth(state, month), [state, month])
   const days = useMemo(() => groupByDay(txsInMonth(state, month)), [state, month])
@@ -172,8 +177,11 @@ export function GeldView({ startCompose }: { startCompose?: TxKind | null }) {
         )}
 
         <div className="btn-row">
-          <button type="button" className="btn btn-wide" onClick={() => setManaging(true)}>
-            Kategorien & Budgets
+          <button type="button" className="btn" onClick={() => setManaging(true)}>
+            Kategorien
+          </button>
+          <button type="button" className="btn" onClick={() => setRecurring(true)}>
+            Wiederkehrend
           </button>
         </div>
 
@@ -224,16 +232,40 @@ export function GeldView({ startCompose }: { startCompose?: TxKind | null }) {
         )}
       </div>
 
+      <UndoBar state={undo} onDismiss={dismiss} />
+
       {managing && <KategorienSheet onClose={() => setManaging(false)} />}
+      {recurring && <WiederkehrendSheet onClose={() => setRecurring(false)} />}
       {compose && <TxSheet kind={compose} onClose={() => setCompose(null)} />}
-      {edit && <TxSheet tx={edit} kind={edit.kind} onClose={() => setEdit(null)} />}
+      {edit && (
+        <TxSheet
+          tx={edit}
+          kind={edit.kind}
+          onClose={() => setEdit(null)}
+          onDelete={() => {
+            remove('txs', edit.id, { type: 'tx/remove', id: edit.id }, 'Buchung gelöscht')
+            setEdit(null)
+          }}
+        />
+      )}
     </>
   )
 }
 
 /* --- Erfassen -------------------------------------------------------------- */
 
-function TxSheet({ tx, kind, onClose }: { tx?: Tx; kind: TxKind; onClose: () => void }) {
+function TxSheet({
+  tx,
+  kind,
+  onClose,
+  onDelete,
+}: {
+  tx?: Tx
+  kind: TxKind
+  onClose: () => void
+  /** Läuft über die Ansicht, weil nur dort der Rückgängig-Streifen lebt. */
+  onDelete?: () => void
+}) {
   const { state, dispatch } = useApp()
   const current = tx ? live(state.txs).find((t) => t.id === tx.id) ?? tx : undefined
 
@@ -272,13 +304,11 @@ function TxSheet({ tx, kind, onClose }: { tx?: Tx; kind: TxKind; onClose: () => 
       title={current ? 'Buchung' : txKind === 'ausgabe' ? 'Ausgabe' : 'Einnahme'}
       onClose={onClose}
       action={
-        current && (
+        current &&
+        onDelete && (
           <button
             type="button"
-            onClick={() => {
-              dispatch({ type: 'tx/remove', id: current.id })
-              onClose()
-            }}
+            onClick={onDelete}
             aria-label="Löschen"
             style={{ width: 40, height: 40, display: 'grid', placeItems: 'center', color: 'var(--bad)' }}
           >

@@ -307,6 +307,43 @@ h2.section {
   margin: 22px 0 8px;
 }
 
+/* Abteilungsname direkt über den Waren, ohne eigene Karte und ohne die großen
+   Abstände einer Überschrift. Klebt beim Scrollen oben fest, damit im Laden
+   jederzeit erkennbar bleibt, in welcher Abteilung man gerade liest. */
+.aisle-head {
+  position: sticky;
+  top: -1px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 16px 6px;
+  margin: 10px -16px 0;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-2);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.aisle-head-count {
+  margin-left: auto;
+  font-weight: 600;
+  color: var(--text-3);
+}
+
+/* Kompakte Zeile für lange Listen: Ohne Unterzeile darf sie niedriger sein.
+   Die Trefferfläche bleibt trotzdem bei 44 px, weil der Abhak-Kreis über die
+   Zeile hinausragt (.check-hit). */
+.row-tight {
+  min-height: 46px;
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+
 /* --- Reiterleiste --------------------------------------------------------- */
 
 .tabbar {
@@ -960,6 +997,224 @@ h2.section {
 .slot-suggested {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* --- Menge und Preis in der Zeile ----------------------------------------- */
+
+/* Menge als antippbare Fläche rechts in der Zeile. Bewusst zurückhaltend
+   gestaltet: Sie steht in jeder Zeile und darf den Namen nicht überstrahlen. */
+.qty {
+  flex: none;
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0 9px;
+  border-radius: 9px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 13.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.qty-empty {
+  color: var(--text-3);
+  background: none;
+}
+
+.qty-step {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+
+.qty-step > button {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+}
+
+.price-add {
+  flex: none;
+  min-height: 30px;
+  padding: 0 9px;
+  border-radius: 8px;
+  border: 1px dashed var(--line);
+  color: var(--text-3);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.price-set {
+  border-style: solid;
+  border-color: transparent;
+  background: var(--good-soft);
+  color: var(--good);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Suche ---------------------------------------------------------------- */
+
+.search {
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.search .input {
+  padding-right: 40px;
+}
+
+.search-clear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  color: var(--text-3);
+}
+
+/* --- Notizen -------------------------------------------------------------- */
+
+.note-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 14px 16px;
+  background: var(--surface);
+}
+
+.note-card + .note-card {
+  border-top: 1px solid var(--line);
+}
+
+.note-title {
+  font-weight: 600;
+  font-size: 15.5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.note-body {
+  font-size: 13.5px;
+  color: var(--text-2);
+  margin-top: 3px;
+  /* Höchstens drei Zeilen in der Übersicht – der Rest steht beim Öffnen. */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: pre-wrap;
+}
+
+.textarea {
+  width: 100%;
+  min-height: 140px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  font-size: 16px;
+  line-height: 1.5;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* --- Rückgängig ----------------------------------------------------------- */
+
+.undo {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  /* Über der Reiterleiste, nicht darüberliegend – sonst verdeckt der Streifen
+     genau die Schaltfläche, die man als Nächstes braucht. */
+  bottom: calc(var(--tabbar-h) + var(--safe-b) + 10px);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: min(560px, calc(100vw - 32px));
+  padding: 10px 12px 10px 16px;
+  border-radius: 13px;
+  background: var(--text);
+  color: var(--bg);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.28);
+  animation: undo-in 0.2s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+@keyframes undo-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px);
+  }
+}
+
+.undo-text {
+  font-size: 14.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.undo-action {
+  flex: none;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 9px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--bg) 14%, transparent);
+  font-size: 14.5px;
+  font-weight: 700;
+}
+
+/* --- Wischen zum Löschen -------------------------------------------------- */
+
+.swipe {
+  position: relative;
+  overflow: hidden;
+  background: var(--bad);
+}
+
+.swipe-row {
+  position: relative;
+  /* pan-y: Senkrechtes Scrollen bleibt Sache des Browsers, waagerechtes
+     übernimmt die Geste. Ohne das ruckelt die Liste beim Ziehen. */
+  touch-action: pan-y;
+  will-change: transform;
+}
+
+.swipe-hint {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 96px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  pointer-events: none;
 }
 
 /* --- Leerzustände --------------------------------------------------------- */

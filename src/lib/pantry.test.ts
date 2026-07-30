@@ -24,6 +24,7 @@ function item(over: Partial<PantryItem> & Pick<PantryItem, 'id' | 'name'>): Pant
     unit: 'Stück',
     minQty: 0,
     bestBefore: null,
+    note: '',
     ...over,
   }
 }
@@ -159,6 +160,8 @@ describe('restockSuggestions', () => {
     done: false,
     addedBy: 'Ich',
     pantryId: null,
+    note: '',
+    priceCents: null,
     ...over,
   })
 
