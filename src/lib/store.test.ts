@@ -47,6 +47,48 @@ describe('Buchungen', () => {
   })
 })
 
+describe('Kategorien', () => {
+  it('legt an und benennt um', () => {
+    let state = reducer(initialState(), {
+      type: 'category/add',
+      category: { name: 'Haustier', emoji: '🐈', kind: 'ausgabe', budgetCents: 5000 },
+    })
+    const added = state.categories[state.categories.length - 1]!
+    expect(added.name).toBe('Haustier')
+    expect(added.budgetCents).toBe(5000)
+
+    state = reducer(state, { type: 'category/update', id: added.id, patch: { name: 'Katze' } })
+    expect(state.categories.find((c) => c.id === added.id)!.name).toBe('Katze')
+  })
+
+  it('lässt Buchungen beim Löschen unangetastet', () => {
+    // Wer eine Kategorie aufräumt, erwartet nicht, dass seine Buchungen
+    // mitverschwinden.
+    let state = withTx(initialState(), { categoryId: 'cat-freizeit' })
+    state = reducer(state, { type: 'category/remove', id: 'cat-freizeit' })
+    expect(state.categories.some((c) => c.id === 'cat-freizeit')).toBe(false)
+    expect(live(state.txs)).toHaveLength(1)
+    expect(state.txs[0]!.categoryId).toBe('cat-freizeit')
+  })
+
+  it('behält die letzte Kategorie ihrer Art', () => {
+    // Ohne sie ließe sich keine Ausgabe mehr erfassen – das Formular hätte
+    // nichts auszuwählen.
+    let state = initialState()
+    const ausgaben = state.categories.filter((c) => c.kind === 'ausgabe')
+    for (const category of ausgaben) {
+      state = reducer(state, { type: 'category/remove', id: category.id })
+    }
+    expect(state.categories.filter((c) => c.kind === 'ausgabe')).toHaveLength(1)
+    expect(state.categories.filter((c) => c.kind === 'einnahme').length).toBeGreaterThan(0)
+  })
+
+  it('lässt eine unbekannte Kennung den Zustand unberührt', () => {
+    const state = initialState()
+    expect(reducer(state, { type: 'category/remove', id: 'gibtsnicht' })).toBe(state)
+  })
+})
+
 describe('Spartöpfe', () => {
   it('nimmt beim Löschen die Einzahlungen mit und löst Challenges', () => {
     let state = reducer(initialState(), {

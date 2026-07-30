@@ -119,6 +119,17 @@ describe('budgetStatus', () => {
   it('führt Kategorien ohne Budget nicht auf', () => {
     expect(budgetStatus(stateWith([tx({ id: '1' })]), '2026-03')).toHaveLength(0)
   })
+
+  it('lässt Budgets auf Einnahme-Kategorien außen vor', () => {
+    // Gezählt werden nur Ausgaben – ein Budget auf „Gehalt“ stünde sonst für
+    // immer bei 0 % und sähe aus, als sei etwas kaputt.
+    const state = stateWith([tx({ id: '1', kind: 'einnahme', cents: 250000, categoryId: 'cat-lohn' })], {
+      categories: initialState().categories.map((c) =>
+        c.id === 'cat-lohn' ? { ...c, budgetCents: 100000 } : c,
+      ),
+    })
+    expect(budgetStatus(state, '2026-03')).toHaveLength(0)
+  })
 })
 
 describe('Spartöpfe', () => {

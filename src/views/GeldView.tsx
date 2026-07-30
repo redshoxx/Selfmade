@@ -16,6 +16,7 @@ import { formatMoney, formatSigned } from '../lib/money'
 import { live } from '../lib/store'
 import { useApp } from '../lib/useApp'
 import type { Tx, TxKind } from '../lib/types'
+import { KategorienSheet } from './KategorienSheet'
 
 /**
  * Einnahmen und Ausgaben.
@@ -29,11 +30,20 @@ export function GeldView({ startCompose }: { startCompose?: TxKind | null }) {
   const [month, setMonth] = useState(currentMonth())
   const [compose, setCompose] = useState<TxKind | null>(startCompose ?? null)
   const [edit, setEdit] = useState<Tx | null>(null)
+  const [managing, setManaging] = useState(false)
 
   const summary = useMemo(() => summarizeMonth(state, month), [state, month])
   const days = useMemo(() => groupByDay(txsInMonth(state, month)), [state, month])
   const budgets = useMemo(() => budgetStatus(state, month), [state, month])
-  const spending = useMemo(() => totalsByCategory(state, month, 'ausgabe'), [state, month])
+  // „Wofür“ zeigt nur, was nicht schon unter „Budgets“ steht. Beide Blöcke
+  // untereinander mit denselben Kategorien zu füllen, liest sich wie ein
+  // Fehler – so ergänzen sie sich: oben die überwachten, darunter der Rest.
+  const spending = useMemo(() => {
+    const withBudget = new Set(budgets.map((b) => b.category.id))
+    return totalsByCategory(state, month, 'ausgabe').filter(
+      (entry) => !entry.category || !withBudget.has(entry.category.id),
+    )
+  }, [state, month, budgets])
 
   const isCurrent = month === currentMonth()
 
@@ -101,38 +111,43 @@ export function GeldView({ startCompose }: { startCompose?: TxKind | null }) {
           </button>
         </div>
 
-        {budgets.some((b) => b.over) && (
+        {budgets.length > 0 && (
           <>
-            <h2 className="section">Budget überzogen</h2>
+            {/* Überzogenes steht oben – `budgetStatus` sortiert nach
+                Auslastung, das Dringendste kommt also von selbst zuerst. */}
+            <h2 className="section">Budgets</h2>
             <div className="card">
-              {budgets
-                .filter((b) => b.over)
-                .map((b) => (
-                  <div key={b.category.id} className="row" style={{ display: 'block', padding: 14 }}>
-                    <div className="spread">
-                      <span className="row-title">
-                        <span aria-hidden="true">{b.category.emoji} </span>
-                        {b.category.name}
-                      </span>
-                      <span className="row-value" style={{ color: 'var(--bad)' }}>
-                        {formatMoney(b.spentCents)}
-                      </span>
-                    </div>
-                    <div style={{ marginTop: 7 }}>
-                      <Bar percent={b.usedPercent} tone="bad" />
-                    </div>
-                    <div className="small muted" style={{ marginTop: 5 }}>
-                      {b.usedPercent} % von {formatMoney(b.budgetCents)}
-                    </div>
+              {budgets.map((b) => (
+                <div key={b.category.id} className="row" style={{ display: 'block', padding: 14 }}>
+                  <div className="spread">
+                    <span className="row-title">
+                      <span aria-hidden="true">{b.category.emoji} </span>
+                      {b.category.name}
+                    </span>
+                    <span className="row-value" style={{ color: b.over ? 'var(--bad)' : undefined }}>
+                      {formatMoney(b.spentCents)}
+                    </span>
                   </div>
-                ))}
+                  <div style={{ marginTop: 7 }}>
+                    <Bar
+                      percent={b.usedPercent}
+                      tone={b.over ? 'bad' : b.usedPercent >= 80 ? 'warn' : 'good'}
+                    />
+                  </div>
+                  <div className="small muted" style={{ marginTop: 5 }}>
+                    {b.over
+                      ? `${formatMoney(b.spentCents - b.budgetCents)} über dem Budget`
+                      : `noch ${formatMoney(b.budgetCents - b.spentCents)} von ${formatMoney(b.budgetCents)}`}
+                  </div>
+                </div>
+              ))}
             </div>
           </>
         )}
 
         {spending.length > 0 && (
           <>
-            <h2 className="section">Wofür</h2>
+            <h2 className="section">{budgets.length > 0 ? 'Wofür sonst' : 'Wofür'}</h2>
             <div className="card">
               {spending.slice(0, 6).map((entry) => (
                 <div
@@ -155,6 +170,12 @@ export function GeldView({ startCompose }: { startCompose?: TxKind | null }) {
             </div>
           </>
         )}
+
+        <div className="btn-row">
+          <button type="button" className="btn btn-wide" onClick={() => setManaging(true)}>
+            Kategorien & Budgets
+          </button>
+        </div>
 
         <h2 className="section">Buchungen</h2>
         {days.length === 0 ? (
@@ -203,6 +224,7 @@ export function GeldView({ startCompose }: { startCompose?: TxKind | null }) {
         )}
       </div>
 
+      {managing && <KategorienSheet onClose={() => setManaging(false)} />}
       {compose && <TxSheet kind={compose} onClose={() => setCompose(null)} />}
       {edit && <TxSheet tx={edit} kind={edit.kind} onClose={() => setEdit(null)} />}
     </>

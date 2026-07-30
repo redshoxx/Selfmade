@@ -103,6 +103,10 @@ export function budgetStatus(state: State, month: string): BudgetStatus[] {
 
   const out: BudgetStatus[] = []
   for (const category of state.categories) {
+    // Nur Ausgaben. Gezählt werden oben ausschließlich Ausgabe-Buchungen –
+    // ein Budget auf einer Einnahme-Kategorie stünde also für immer bei 0 %
+    // und sähe aus, als sei etwas kaputt.
+    if (category.kind !== 'ausgabe') continue
     if (category.budgetCents === null || category.budgetCents <= 0) continue
     const spentCents = spent.get(category.id) ?? 0
     out.push({

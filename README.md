@@ -107,6 +107,36 @@ Fertige Vorlagen:
 
 ---
 
+## Kategorien und Budgets
+
+Die App bringt einen Satz Kategorien mit. Unter *Geld → Kategorien & Budgets*
+lassen sich eigene anlegen, umbenennen und mit einem Zeichen versehen.
+
+Zu jeder **Ausgaben**-Kategorie kann ein Monatsbudget hinterlegt werden. Das
+sperrt nichts – wer an der Kasse steht, ist mit einer Sperre nicht geholfen.
+Die App markiert nur, wie weit der Monat aufgebraucht ist:
+
+| Stand | Anzeige |
+| --- | --- |
+| unter 80 % | grün, „noch … von …“ |
+| ab 80 % | gelb |
+| darüber | rot, „… über dem Budget“ |
+
+Bei Einnahmen gibt es kein Budget. Gezählt werden nur Ausgaben – ein Budget auf
+„Gehalt“ stünde für immer bei 0 % und sähe aus, als sei etwas kaputt.
+
+Zwei Dinge nimmt die App bewusst in die Hand:
+
+- **Beim Löschen bleiben die Buchungen.** Sie laufen danach unter „Ohne
+  Kategorie“ und zählen weiter in die Monatssumme. Sie mitzulöschen wäre ein
+  Datenverlust, den niemand erwartet, wenn er nur aufräumen wollte.
+- **Die letzte Kategorie ihrer Art bleibt stehen.** Ohne sie ließe sich keine
+  Ausgabe bzw. Einnahme mehr erfassen: Das Formular hätte nichts auszuwählen
+  und „Speichern“ bliebe für immer grau. Ein Aufräumen darf die App nicht
+  unbenutzbar machen.
+
+---
+
 ## Zu zweit nutzen – Supabase einrichten
 
 Ohne diesen Schritt läuft die App vollständig, aber allein: Alle Bereiche
@@ -183,7 +213,12 @@ npm run dev        # Entwicklungsserver auf Port 5173
 npm test           # 138 Tests
 npm run typecheck
 npm run build      # Produktionsbündel nach dist/
+npm run build:single  # alles in einer HTML-Datei, nach dist-single/
 ```
+
+`build:single` packt CSS und JavaScript in eine einzige Seite. Zum Herzeigen
+genügt dann eine Datei – doppelklicken, fertig, ohne Server und ohne
+Installation.
 
 Die Symbole werden nicht mitgeliefert, sondern erzeugt:
 

@@ -194,6 +194,13 @@ export function reducer(state: State, action: Action): State {
         categories: state.categories.map((c) => (c.id === action.id ? { ...c, ...action.patch, id: c.id } : c)),
       }
     case 'category/remove': {
+      const doomed = state.categories.find((c) => c.id === action.id)
+      if (!doomed) return state
+      // Die letzte Kategorie ihrer Art bleibt stehen. Ohne sie ließe sich
+      // keine Einnahme bzw. Ausgabe mehr erfassen – das Formular hätte nichts
+      // mehr auszuwählen und die Schaltfläche zum Speichern bliebe für immer
+      // grau. Ein Aufräumen darf die App nicht unbenutzbar machen.
+      if (state.categories.filter((c) => c.kind === doomed.kind).length <= 1) return state
       // Buchungen behalten ihre Kategorie-Kennung; die Oberfläche zeigt dann
       // „Ohne Kategorie“. Buchungen mitzulöschen wäre ein Datenverlust, den
       // niemand erwartet, wenn er nur eine Kategorie aufräumen wollte.
