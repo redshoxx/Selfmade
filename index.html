@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="de" data-theme="">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- viewport-fit=cover: ohne das bleiben auf dem iPhone schwarze Balken neben
+         Notch und Home-Indikator. Kein maximum-scale – Zoom zu sperren nimmt
+         Menschen mit schlechten Augen die App weg. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="description" content="Finanzen, Spar-Challenges, Einkaufsliste und Vorrat – zu zweit nutzbar." />
+    <meta name="theme-color" content="#f7f7f5" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#101012" media="(prefers-color-scheme: dark)" />
+    <!-- Vollbild ohne Safari-Leisten, sobald die App vom Homescreen startet. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Selfmade" />
+    <meta name="format-detection" content="telephone=no" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/icon-180.png" />
+    <title>Selfmade</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
