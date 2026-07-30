@@ -276,7 +276,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const root = document.documentElement
     const theme = state.settings.theme
-    root.dataset.theme = theme === 'hell' ? 'light' : theme === 'dunkel' ? 'dark' : ''
+    // Bewusst `data-choice` und nicht `data-theme`: Letzteres gehört der
+    // Umgebung, in der die App läuft. Schriebe die App hinein, überschriebe
+    // sie deren Umschalter. Bei „System“ steht hier nichts – dann entscheidet
+    // die Umgebung, sonst das Betriebssystem.
+    if (theme === 'system') delete root.dataset.choice
+    else root.dataset.choice = theme
   }, [state.settings.theme])
 
   const value = useMemo<AppValue>(

@@ -60,8 +60,22 @@
   color-scheme: light dark;
 }
 
-:root,
-:root[data-theme='light'] {
+/* ---------------------------------------------------------------------------
+   Vier Stufen, absichtlich in dieser Reihenfolge – die spätere gewinnt:
+
+   1. hell als Grundlage
+   2. `prefers-color-scheme` – was das Betriebssystem vorgibt
+   3. `data-theme` – was die *Umgebung* vorgibt. Läuft die App eingebettet,
+      stempelt der Rahmen dieses Attribut, wenn dort umgeschaltet wird.
+   4. `data-choice` – was in den Einstellungen der App ausdrücklich gewählt
+      wurde. Diese Wahl schlägt alles andere.
+
+   Getrennte Attribute für 3 und 4 sind nötig, nicht hübsch: Schriebe die App
+   ihre Wahl in dasselbe `data-theme`, überschriebe sie damit die Vorgabe der
+   Umgebung – und der Umschalter des Rahmens bliebe wirkungslos.
+   --------------------------------------------------------------------------- */
+
+:root {
   --bg: var(--l-bg);
   --surface: var(--l-surface);
   --surface-2: var(--l-surface-2);
@@ -83,7 +97,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
+  :root {
     --bg: var(--d-bg);
     --surface: var(--d-surface);
     --surface-2: var(--d-surface-2);
@@ -105,7 +119,70 @@
   }
 }
 
+:root[data-theme='light'] {
+  --bg: var(--l-bg);
+  --surface: var(--l-surface);
+  --surface-2: var(--l-surface-2);
+  --text: var(--l-text);
+  --text-2: var(--l-text-2);
+  --text-3: var(--l-text-3);
+  --line: var(--l-line);
+  --accent: var(--l-accent);
+  --accent-2: var(--l-accent-2);
+  --accent-soft: var(--l-accent-soft);
+  --good: var(--l-good);
+  --good-soft: var(--l-good-soft);
+  --warn: var(--l-warn);
+  --warn-soft: var(--l-warn-soft);
+  --bad: var(--l-bad);
+  --bad-soft: var(--l-bad-soft);
+  --shadow: var(--l-shadow);
+  color-scheme: light;
+}
+
 :root[data-theme='dark'] {
+  --bg: var(--d-bg);
+  --surface: var(--d-surface);
+  --surface-2: var(--d-surface-2);
+  --text: var(--d-text);
+  --text-2: var(--d-text-2);
+  --text-3: var(--d-text-3);
+  --line: var(--d-line);
+  --accent: var(--d-accent);
+  --accent-2: var(--d-accent-2);
+  --accent-soft: var(--d-accent-soft);
+  --good: var(--d-good);
+  --good-soft: var(--d-good-soft);
+  --warn: var(--d-warn);
+  --warn-soft: var(--d-warn-soft);
+  --bad: var(--d-bad);
+  --bad-soft: var(--d-bad-soft);
+  --shadow: var(--d-shadow);
+  color-scheme: dark;
+}
+
+:root[data-choice='hell'] {
+  --bg: var(--l-bg);
+  --surface: var(--l-surface);
+  --surface-2: var(--l-surface-2);
+  --text: var(--l-text);
+  --text-2: var(--l-text-2);
+  --text-3: var(--l-text-3);
+  --line: var(--l-line);
+  --accent: var(--l-accent);
+  --accent-2: var(--l-accent-2);
+  --accent-soft: var(--l-accent-soft);
+  --good: var(--l-good);
+  --good-soft: var(--l-good-soft);
+  --warn: var(--l-warn);
+  --warn-soft: var(--l-warn-soft);
+  --bad: var(--l-bad);
+  --bad-soft: var(--l-bad-soft);
+  --shadow: var(--l-shadow);
+  color-scheme: light;
+}
+
+:root[data-choice='dunkel'] {
   --bg: var(--d-bg);
   --surface: var(--d-surface);
   --surface-2: var(--d-surface-2);
