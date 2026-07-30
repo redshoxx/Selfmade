@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "build:single": "npm run build && node scripts/build-standalone.mjs",
+    "build:demo": "vite build --mode demo && node scripts/build-standalone.mjs",
     "test": "vitest run",
     "typecheck": "tsc -b --pretty"
   },

@@ -30,11 +30,13 @@ import type { Challenge, Pot } from '../lib/types'
  * echtes Geld, und der Fortschritt steht nicht nur im Raster, sondern auch im
  * Sparstand.
  */
-export function SparenView() {
+export function SparenView({ startPicking }: { startPicking?: boolean }) {
   const { state } = useApp()
   const [openChallenge, setOpenChallenge] = useState<Challenge | null>(null)
   const [openPot, setOpenPot] = useState<Pot | null>(null)
-  const [picking, setPicking] = useState(false)
+  // Kommt man über den Einstieg auf der Startseite, steht die Auswahl gleich
+  // offen – sonst wäre der Weg dorthin zwei Tipps lang statt einem.
+  const [picking, setPicking] = useState(Boolean(startPicking))
   const [creatingPot, setCreatingPot] = useState(false)
 
   const challenges = useMemo(

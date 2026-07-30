@@ -245,6 +245,50 @@ der Form `K7M-2QD`. Den gibt deine Freundin bei sich unter *Beitreten* ein –
 ab dann sehen beide dieselbe Einkaufsliste und denselben Vorrat, Änderungen
 erscheinen binnen Sekunden auf dem anderen Gerät.
 
+> **Zu den Schlüsseln:** Supabase zeigt zwei. Der **publishable** (`sb_publishable_…`)
+> gehört in die App – er ist für den Browser gemacht und darf öffentlich sein.
+> Der **secret** (`sb_secret_…`) umgeht *sämtliche* Zugriffsregeln; wer ihn hat,
+> liest und ändert die Daten jedes Haushalts. Er darf niemals in die App, ins
+> Repository, in eine Nachricht oder in die Einstellungen des Hosters. Ist er
+> versehentlich irgendwo gelandet: in Supabase unter *Project Settings → API
+> Keys* widerrufen und neu erzeugen.
+
+---
+
+## Unter eigener Adresse veröffentlichen
+
+Zum Teilen braucht die App eine Adresse, die beide erreichen. Die Konfiguration
+liegt bereit – für **Netlify** (`netlify.toml`) und für **Vercel**
+(`vercel.json`). Beide sind kostenlos; Netlify ist etwas geradliniger.
+
+**1. Verbinden.** Bei [netlify.com](https://netlify.com) anmelden, *Add new site
+→ Import an existing project*, das GitHub-Repository auswählen. Build-Befehl und
+Ausgabeordner liest Netlify aus `netlify.toml`; du musst dort nichts eintragen.
+
+**2. Zugangsdaten hinterlegen.** Unter *Site configuration → Environment
+variables* zwei Einträge anlegen:
+
+| Name | Wert |
+| --- | --- |
+| `VITE_SUPABASE_URL` | die Projekt-URL aus Supabase |
+| `VITE_SUPABASE_ANON_KEY` | der **publishable** Schlüssel |
+
+Ohne sie baut die App zwar, läuft aber rein lokal – das Teilen fehlt dann.
+
+**3. Veröffentlichen.** *Deploy site*. Nach etwa einer Minute steht eine Adresse
+wie `dein-name.netlify.app` bereit; eine eigene Domain lässt sich später
+anhängen.
+
+**4. Adresse in Supabase nachtragen.** Unter *Authentication → URL
+Configuration* die neue Adresse als *Site URL* eintragen und unter *Redirect
+URLs* ergänzen. Ohne das führt der Anmeldelink aus der E-Mail ins Leere.
+
+**5. Auf dem Telefon einrichten.** Adresse im Browser öffnen, dann *Teilen → Zum
+Home-Bildschirm* (iPhone) bzw. *Zum Startbildschirm hinzufügen* (Android).
+Danach läuft die App im Vollbild und offline.
+
+Jeder weitere Push auf den Branch veröffentlicht automatisch neu.
+
 Der Code ist zum Vorlesen gemacht: I, O, 0 und 1 kommen darin nicht vor, damit
 niemand an der Frage scheitert, ob das eine Null oder ein O war.
 

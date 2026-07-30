@@ -1,17 +1,31 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { IconGear } from './components/Icons'
 import { TabBar } from './components/TabBar'
 import { pantryCounts } from './lib/pantry'
 import { clearLaunchIntent, readLaunchIntent, trackKeyboardInset } from './lib/platform'
 import { shopCounts } from './lib/shopping'
 import { useApp } from './lib/useApp'
-import type { Tab } from './lib/types'
+import type { Tab, TxKind } from './lib/types'
 import { EinkaufView } from './views/EinkaufView'
 import { EinstellungenSheet } from './views/EinstellungenSheet'
 import { GeldView } from './views/GeldView'
 import { SparenView } from './views/SparenView'
 import { StartView } from './views/StartView'
 import { VorratView } from './views/VorratView'
+
+/**
+ * Was beim Wechsel in einen Bereich gleich mit aufgehen soll.
+ *
+ * Ein Einstieg auf der Startseite soll nicht nur den Reiter umschalten, sondern
+ * direkt dorthin führen, wo etwas passiert – „Ausgabe erfassen“ öffnet das
+ * Formular, nicht bloß den Geld-Bereich. Weil beim Reiterwechsel neu aufgebaut
+ * wird, genügt dafür eine Angabe, die die Ansicht beim Start einmal liest.
+ */
+export interface GoIntent {
+  compose?: TxKind
+  /** Im Sparen-Bereich gleich die Challenge-Auswahl zeigen. */
+  challenge?: boolean
+}
 
 export function App() {
   const { state } = useApp()
@@ -25,9 +39,15 @@ export function App() {
   })
 
   const [tab, setTab] = useState<Tab>(intent.tab ?? state.settings.startTab)
+  const [go, setGo] = useState<GoIntent>(() => (intent.compose ? { compose: intent.compose } : {}))
   const [settingsOpen, setSettingsOpen] = useState(false)
 
   useEffect(() => trackKeyboardInset(), [])
+
+  const goTo = useCallback((next: Tab, withIntent: GoIntent = {}) => {
+    setGo(withIntent)
+    setTab(next)
+  }, [])
 
   const shop = shopCounts(state)
   const pantry = pantryCounts(state)
@@ -40,11 +60,12 @@ export function App() {
   return (
     <div className="app">
       {/* Der Schlüssel setzt beim Wechsel die Scrollposition zurück – sonst
-          landet man in der neuen Ansicht mittendrin. */}
+          landet man in der neuen Ansicht mittendrin. Er sorgt zugleich dafür,
+          dass die Absicht oben beim Aufbau gelesen wird. */}
       <main style={{ display: 'contents' }} key={tab}>
-        {tab === 'start' && <StartView onGo={setTab} />}
-        {tab === 'geld' && <GeldView startCompose={intent.compose} />}
-        {tab === 'sparen' && <SparenView />}
+        {tab === 'start' && <StartView onGo={goTo} onSettings={() => setSettingsOpen(true)} />}
+        {tab === 'geld' && <GeldView startCompose={go.compose ?? null} />}
+        {tab === 'sparen' && <SparenView startPicking={go.challenge} />}
         {tab === 'einkauf' && <EinkaufView />}
         {tab === 'vorrat' && <VorratView startFilter={intent.filter ?? undefined} />}
       </main>
@@ -61,14 +82,14 @@ export function App() {
           height: 40,
           display: 'grid',
           placeItems: 'center',
-          color: 'var(--text-3)',
+          color: 'var(--text-2)',
           zIndex: 10,
         }}
       >
         <IconGear size={21} />
       </button>
 
-      <TabBar active={tab} counts={counts} onChange={setTab} />
+      <TabBar active={tab} counts={counts} onChange={(next) => goTo(next)} />
 
       {settingsOpen && <EinstellungenSheet onClose={() => setSettingsOpen(false)} />}
     </div>

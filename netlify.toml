@@ -1,0 +1,44 @@
+# Veröffentlichung bei Netlify.
+#
+# Die beiden Zugangsdaten stehen NICHT hier, sondern in den Einstellungen des
+# Projekts unter „Site configuration → Environment variables“:
+#
+#   VITE_SUPABASE_URL        https://dein-projekt.supabase.co
+#   VITE_SUPABASE_ANON_KEY   sb_publishable_…
+#
+# Sie werden beim Bauen eingesetzt. Der secret key gehört niemals dorthin – er
+# umgeht sämtliche Zugriffsregeln.
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# Alle Pfade auf die eine Seite leiten. Ohne das zeigt ein Neuladen unter einer
+# Unteradresse einen 404 – und der Anmeldelink von Supabase, der mit einem
+# Anhang zurückkommt, liefe ins Leere.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Die Dateien mit Hash im Namen ändern sich nie unter gleichem Namen und dürfen
+# deshalb lange zwischengespeichert werden.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Das Grundgerüst dagegen nie zwischenspeichern, sonst kommt nach einer neuen
+# Veröffentlichung noch tagelang die alte Fassung an.
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"

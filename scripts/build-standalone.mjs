@@ -8,7 +8,14 @@
  * Ohne hinterlegte Zugangsdaten läuft sie darin rein lokal: Alle Bereiche
  * funktionieren, nur das Teilen fehlt.
  *
- *   npm run build && node scripts/build-standalone.mjs
+ *   npm run build:single   mit den Zugangsdaten aus .env
+ *   npm run build:demo     ohne – zum Weitergeben
+ *
+ * Zum Herzeigen ist `build:demo` der richtige Weg. Die Zugangsdaten stehen im
+ * fertigen Bündel im Klartext; wer die Datei bekommt, könnte sich sonst am
+ * eigenen Supabase-Projekt anmelden und dort Haushalte anlegen. Der Schlüssel
+ * ist zwar für den Browser gedacht, aber die Datei soll ja weitergegeben
+ * werden – und dann liest sie jeder.
  *
  * Schreibt:
  *   dist-single/selfmade.html   vollständige Seite
@@ -68,6 +75,36 @@ ${body}
   </body>
 </html>
 `
+
+/**
+ * Sicherung: Im Demo-Bau dürfen keine Zugangsdaten stecken.
+ *
+ * Die Datei wird weitergereicht, und im fertigen Bündel steht alles im
+ * Klartext. Wäre der Schlüssel darin, könnte sich jeder Empfänger am eigenen
+ * Supabase-Projekt anmelden und dort Haushalte anlegen.
+ *
+ * Ein stiller Fehlgriff wäre hier teuer, deshalb bricht der Bau lieber ab:
+ * Leere Werte in `.env.demo` können durch eine falsche Reihenfolge beim Laden
+ * unwirksam werden, und das sieht man dem Ergebnis nicht an.
+ */
+if (process.argv.includes('--demo') || process.env.NODE_ENV === 'demo' || isDemoBuild()) {
+  const verdaechtig = [/sb_publishable_[A-Za-z0-9_-]+/, /https:\/\/[a-z0-9]{20}\.supabase\.co/]
+  for (const muster of verdaechtig) {
+    const treffer = body.match(muster)
+    if (treffer) {
+      console.error('\nAbbruch: Im Demo-Bau stecken Zugangsdaten.')
+      console.error('Gefunden:', treffer[0].slice(0, 24) + '…')
+      console.error('Prüfe, ob `.env.demo` geladen wurde (vite build --mode demo).\n')
+      process.exit(1)
+    }
+  }
+}
+
+/** Wurde mit `--mode demo` gebaut? Vite schreibt den Modus nicht ins Ergebnis,
+ *  deshalb am Aufruf ablesen. */
+function isDemoBuild() {
+  return (process.env.npm_lifecycle_event ?? '') === 'build:demo'
+}
 
 mkdirSync(OUT, { recursive: true })
 writeFileSync(join(OUT, 'selfmade.html'), page)
