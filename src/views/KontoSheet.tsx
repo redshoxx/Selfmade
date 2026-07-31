@@ -18,10 +18,10 @@ import type { Person } from '../lib/types'
  * freigeschaltet ist, sieht dieselbe Einkaufsliste – ohne Zutun.
  */
 export function KontoSheet({ onClose }: { onClose: () => void }) {
-  const { state, session, cloudError, signIn, verifyCode, signOut, magicLinkSentTo, zugang } = useApp()
+  const { state, session, cloudError, signIn, signOut, zugang } = useApp()
 
   const [email, setEmail] = useState('')
-  const [token, setToken] = useState('')
+  const [passwort, setPasswort] = useState('')
   const [busy, setBusy] = useState(false)
   const [checks, setChecks] = useState<CheckResult[] | null>(null)
   const [checking, setChecking] = useState(false)
@@ -30,6 +30,8 @@ export function KontoSheet({ onClose }: { onClose: () => void }) {
   const [listenFehler, setListenFehler] = useState<string | null>(null)
   const [neueAdresse, setNeueAdresse] = useState('')
   const [neuerName, setNeuerName] = useState('')
+
+  const bereit = email.includes('@') && passwort.length > 0
 
   const run = async (task: () => Promise<void>) => {
     setBusy(true)
@@ -59,79 +61,56 @@ export function KontoSheet({ onClose }: { onClose: () => void }) {
     <Sheet title="Konto" onClose={onClose}>
       {!session ? (
         <div className="card pad">
-          {magicLinkSentTo ? (
-            <>
-              <p className="small" style={{ marginTop: 0 }}>
-                Wir haben dir eine E-Mail an <strong>{magicLinkSentTo}</strong> geschickt. Tipp den
-                sechsstelligen Code daraus hier ein.
-              </p>
+          <p className="small muted" style={{ marginTop: 0 }}>
+            Melde dich an, dann liegen deine Daten auf deinem Supabase-Projekt und sind auf jedem
+            Gerät da.
+          </p>
 
-              <Field label="Code aus der E-Mail">
-                <input
-                  className="input"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  maxLength={6}
-                  value={token}
-                  onChange={(event) => setToken(event.target.value.replace(/\D/g, ''))}
-                  placeholder="123456"
-                  style={{ letterSpacing: '0.28em', textAlign: 'center', fontSize: 20 }}
-                />
-              </Field>
-              <button
-                type="button"
-                className="btn btn-primary btn-wide"
-                disabled={token.length < 6 || busy}
-                onClick={() => run(() => verifyCode(magicLinkSentTo, token))}
-              >
-                Anmelden
-              </button>
+          {/* Ein echtes Formular, kein loser Haufen Felder: Nur so füllt der
+              Schlüsselbund von iPhone und Android beide Felder aus, und nur so
+              meldet die Eingabetaste an. */}
+          <form
+            onSubmit={(event) => {
+              event.preventDefault()
+              if (bereit) void run(() => signIn(email, passwort))
+            }}
+          >
+            <Field label="E-Mail">
+              <input
+                className="input"
+                type="email"
+                inputMode="email"
+                autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="du@beispiel.de"
+              />
+            </Field>
+            <Field label="Passwort">
+              <input
+                className="input"
+                type="password"
+                autoComplete="current-password"
+                value={passwort}
+                onChange={(event) => setPasswort(event.target.value)}
+                placeholder="••••••••"
+              />
+            </Field>
+            <button type="submit" className="btn btn-primary btn-wide" disabled={!bereit || busy}>
+              {busy ? 'Wird geprüft …' : 'Anmelden'}
+            </button>
+          </form>
 
-              {/* Auf dem iPhone ist der Code nicht die Notlösung, sondern der
-                  verlässliche Weg: Eine vom Homescreen gestartete App hat
-                  ihren eigenen Speicher, der Link in der Mail öffnet aber
-                  Safari – dort landet die Anmeldung und bleibt liegen. */}
-              <p className="small muted" style={{ marginBottom: 0 }}>
-                In derselben Mail steht auch ein Link. Der funktioniert im Browser; hast du die App
-                auf dem Homescreen, nimm den Code.
-              </p>
-              <button
-                type="button"
-                className="btn btn-wide"
-                disabled={busy}
-                onClick={() => run(() => signIn(magicLinkSentTo))}
-              >
-                Neuen Code schicken
-              </button>
-            </>
-          ) : (
-            <>
-              <p className="small muted" style={{ marginTop: 0 }}>
-                Melde dich mit deiner E-Mail-Adresse an. Danach liegen deine Daten sicher auf deinem
-                Supabase-Projekt und sind auf jedem Gerät da. Ein Passwort brauchst du nicht.
-              </p>
-              <Field label="E-Mail">
-                <input
-                  className="input"
-                  type="email"
-                  inputMode="email"
-                  autoComplete="email"
-                  autoCapitalize="none"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="du@beispiel.de"
-                />
-              </Field>
-              <button
-                type="button"
-                className="btn btn-primary btn-wide"
-                disabled={!email.includes('@') || busy}
-                onClick={() => run(() => signIn(email))}
-              >
-                Code schicken
-              </button>
-            </>
-          )}
+          {/* Die Konten entstehen im Dashboard, nicht hier. Ohne bestätigte
+              Adresse wäre die Zugangsliste wertlos – sie entscheidet ja
+              anhand der E-Mail-Adresse, wer die gemeinsame Liste sieht. */}
+          <p className="small muted" style={{ marginBottom: 0 }}>
+            Die Zugangsdaten legst du einmal in Supabase an, unter{' '}
+            <em>Authentication → Users → Add user</em>, mit Häkchen bei „Auto Confirm User“. In der
+            README steht es Schritt für Schritt.
+          </p>
         </div>
       ) : (
         <>

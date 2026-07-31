@@ -19,7 +19,13 @@ import {
   writeStoredState,
   type Action,
 } from './store'
-import { anmeldeFehlerAusAdresse, cloudConfigured, raeumeAnmeldeFehler, redirectTo, supabase } from './supabase'
+import {
+  anmeldeFehlerAusAdresse,
+  anmeldeFehlerText,
+  cloudConfigured,
+  raeumeAnmeldeFehler,
+  supabase,
+} from './supabase'
 import { erklaereFehler } from './diagnose'
 import { pruefeZugang, pullAll, pushChanges, subscribeShared } from './sync'
 import type { State } from './types'
@@ -52,12 +58,8 @@ interface AppValue {
   cloudStatus: CloudStatus
   cloudError: string | null
   session: Session | null
-  signIn: (email: string) => Promise<void>
-  /** Anmeldung mit dem sechsstelligen Code aus der Mail. */
-  verifyCode: (email: string, token: string) => Promise<void>
+  signIn: (email: string, passwort: string) => Promise<void>
   signOut: () => Promise<void>
-  /** Anmeldelink verschickt – die Oberfläche zeigt dann den Hinweis. */
-  magicLinkSentTo: string | null
   /**
    * Ist diese Adresse für die geteilten Daten freigeschaltet?
    *
@@ -82,7 +84,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [cloudStatus, setCloudStatus] = useState<CloudStatus>(cloudConfigured ? 'abgemeldet' : 'aus')
   const [cloudError, setCloudError] = useState<string | null>(null)
-  const [magicLinkSentTo, setMagicLinkSentTo] = useState<string | null>(null)
   const [zugang, setZugang] = useState<boolean | null>(null)
 
   const stateRef = useRef(state)
@@ -122,10 +123,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const { data: listener } = supabase.auth.onAuthStateChange((_event, next) => {
       const user = next?.user
       setSession(user ? { userId: user.id, email: user.email ?? '' } : null)
-      if (user) {
-        setMagicLinkSentTo(null)
-        setCloudError(null)
-      }
+      if (user) setCloudError(null)
     })
 
     return () => {
@@ -134,53 +132,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const signIn = useCallback(async (email: string) => {
-    if (!supabase) return
-    setCloudError(null)
-    const { error } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
-      options: { emailRedirectTo: redirectTo() },
-    })
-    if (error) {
-      setCloudError(
-        error.message.toLowerCase().includes('rate')
-          ? 'Zu viele Anfragen. Warte eine Minute und versuch es noch einmal.'
-          : 'Der Anmeldelink konnte nicht verschickt werden.',
-      )
-      return
-    }
-    setMagicLinkSentTo(email.trim())
-  }, [])
-
   /**
-   * Anmelden mit dem Code aus der Mail statt über den Link.
+   * Anmelden mit E-Mail und Passwort.
    *
-   * Auf dem iPhone ist das nicht die zweite Wahl, sondern der einzige Weg, der
-   * zuverlässig funktioniert: Eine vom Homescreen gestartete Web-App hat ihren
-   * eigenen Speicher. Der Link in der Mail öffnet aber Safari – die Anmeldung
-   * landet dort und kommt in der App nie an. Ein abgetippter Code bleibt, wo
-   * er eingegeben wurde.
+   * Bewusst ohne jede E-Mail: Vorher lief die Anmeldung über einen Code aus
+   * einer Mail, und genau daran scheiterte sie. Der eingebaute Mailversand von
+   * Supabase ist auf wenige Nachrichten je Stunde gedrosselt, ein Code gilt nur
+   * eine Stunde, und ob er überhaupt in der Mail steht, hängt an einer Vorlage
+   * im Dashboard, die niemand von hier aus prüfen kann. Ein Passwort hat keine
+   * dieser Eigenschaften – und der Schlüsselbund des Telefons trägt es ein.
+   *
+   * Die Konten legt man in Supabase an, nicht hier. Warum, steht in der README:
+   * Ohne bestätigte Adresse wäre die Zugangsliste wertlos, denn sie
+   * entscheidet anhand der E-Mail-Adresse.
    */
-  const verifyCode = useCallback(async (email: string, token: string) => {
+  const signIn = useCallback(async (email: string, passwort: string) => {
     if (!supabase) return
     setCloudError(null)
-    const ziffern = token.replace(/\D/g, '')
-    if (ziffern.length < 6) {
-      setCloudError('Der Code besteht aus sechs Ziffern.')
-      return
-    }
-
-    const adresse = email.trim()
-    const ersterVersuch = await supabase.auth.verifyOtp({ email: adresse, token: ziffern, type: 'email' })
-    if (!ersterVersuch.error) return
-
-    // Wer sich zum ersten Mal anmeldet, bekommt die Bestätigungsmail statt der
-    // Anmeldemail – und deren Code gilt unter einem anderen Typ. Welcher Fall
-    // vorliegt, weiß die App nicht, also probiert sie den zweiten mit.
-    const zweiterVersuch = await supabase.auth.verifyOtp({ email: adresse, token: ziffern, type: 'signup' })
-    if (!zweiterVersuch.error) return
-
-    setCloudError('Der Code stimmt nicht oder ist abgelaufen. Fordere einen neuen an.')
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password: passwort,
+    })
+    if (error) setCloudError(anmeldeFehlerText(error))
   }, [])
 
   const signOut = useCallback(async () => {
@@ -339,9 +312,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       cloudError,
       session,
       signIn,
-      verifyCode,
       signOut,
-      magicLinkSentTo,
       zugang,
     }),
     [
@@ -350,9 +321,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       cloudError,
       session,
       signIn,
-      verifyCode,
       signOut,
-      magicLinkSentTo,
       zugang,
     ],
   )

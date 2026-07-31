@@ -17,9 +17,10 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
  * Dass diese Werte im Quelltext stehen, ist vertretbar und keine Nachlässigkeit:
  * Der publishable key ist für den Browser gemacht und steckt in *jedem*
  * fertigen Bündel im Klartext. Was schützt, sind die Zugriffsregeln in der
- * Datenbank – jeder sieht nur seinen eigenen Haushalt. Der secret key
- * dagegen gehört nirgendwohin außer nach Supabase; der Bau bricht ab, wenn er
- * ihn in einem Bündel findet.
+ * Datenbank und die Zugangsliste – wer nicht daraufsteht, sieht nichts, und
+ * neue Konten legt nur an, wer ins Dashboard kommt. Der secret key dagegen
+ * gehört nirgendwohin außer nach Supabase; der Bau bricht ab, wenn er ihn in
+ * einem Bündel findet.
  */
 const EINGEBAUT = {
   url: 'https://ecflcrigkfyhifekwfxq.supabase.co',
@@ -40,15 +41,53 @@ export const supabase: SupabaseClient | null = cloudConfigured
       auth: {
         persistSession: true,
         autoRefreshToken: true,
-        // Der Anmeldelink von Supabase bringt die Sitzung in der Adresse mit.
+        // Angemeldet wird mit Passwort; hierfür braucht es das nicht mehr.
+        // Es bleibt trotzdem an: In alten Postfächern liegen noch
+        // Anmeldelinks von früher, und wer so einen antippt, soll
+        // hineinkommen statt vor einer stummen App zu stehen.
         detectSessionInUrl: true,
       },
     })
   : null
 
-/** Adresse, an die der Anmeldelink zurückführt. */
-export function redirectTo(): string {
-  return `${window.location.origin}${window.location.pathname}`
+/**
+ * Was Supabase beim Anmelden antwortet, in einen Satz übersetzen.
+ *
+ * Rein und ohne Browser, damit die Zuordnung geprüft werden kann – bei
+ * Fehlermeldungen entscheidet sich, ob jemand weiterkommt oder an der falschen
+ * Stelle sucht.
+ */
+export function anmeldeFehlerText(fehler: { code?: string; message?: string } | null): string {
+  if (!fehler) return 'Die Anmeldung hat nicht geklappt.'
+  const text = (fehler.message ?? '').toLowerCase()
+
+  if (fehler.code === 'invalid_credentials' || text.includes('invalid login credentials')) {
+    return 'E-Mail oder Passwort stimmt nicht.'
+  }
+
+  // Der einzige Fall, in dem beides stimmt und trotzdem nichts geht. Ohne
+  // eigenen Satz probiert man das Passwort immer wieder – und es liegt gar
+  // nicht daran.
+  if (fehler.code === 'email_not_confirmed' || text.includes('email not confirmed')) {
+    return 'Das Konto ist noch nicht bestätigt. In Supabase unter Authentication → Users öffnen und bestätigen.'
+  }
+
+  if (fehler.code === 'over_request_rate_limit' || text.includes('rate limit') || text.includes('too many')) {
+    return 'Zu viele Versuche. Warte einen Moment und probier es noch einmal.'
+  }
+
+  if (
+    text.includes('failed to fetch') ||
+    text.includes('networkerror') ||
+    text.includes('load failed') ||
+    text.includes('fetch failed')
+  ) {
+    return 'Keine Verbindung. Prüf das Netz.'
+  }
+
+  // Bei einem abgeschalteten Anbieter oder gesperrten Neuanmeldungen ist die
+  // Meldung von Supabase brauchbar genug, um sie durchzureichen.
+  return fehler.message ?? 'Die Anmeldung hat nicht geklappt.'
 }
 
 /**
@@ -57,8 +96,11 @@ export function redirectTo(): string {
  * Supabase hängt so etwas hinten an die Adresse: `#error=access_denied&
  * error_code=otp_expired&…`. Ohne diese Auswertung passiert nach dem Antippen
  * eines abgelaufenen Links sichtbar *nichts* – die App öffnet sich, ist aber
- * nicht angemeldet, und niemand weiß, warum. Genau daran scheitert der zweite
- * Anlauf, wenn die erste Mail zu lange lag.
+ * nicht angemeldet, und niemand weiß, warum.
+ *
+ * Betrifft nur noch alte Mails: Angemeldet wird mit Passwort, solche Links
+ * verschickt die App nicht mehr. Wer einen aus dem Postfach hervorkramt, soll
+ * aber erfahren, warum nichts passiert.
  */
 export function anmeldeFehlerAusAdresse(hash: string = window.location.hash): string | null {
   const roh = hash.startsWith('#') ? hash.slice(1) : hash
@@ -74,7 +116,7 @@ export function anmeldeFehlerAusAdresse(hash: string = window.location.hash): st
 
   const code = params.get('error_code') ?? ''
   if (code === 'otp_expired' || code === 'access_denied') {
-    return 'Der Anmeldelink ist abgelaufen oder wurde schon benutzt. Fordere einen neuen an.'
+    return 'Dieser Anmeldelink ist abgelaufen. Melde dich unten mit E-Mail und Passwort an.'
   }
   const beschreibung = params.get('error_description')
   return beschreibung ? beschreibung.replace(/\+/g, ' ') : 'Die Anmeldung wurde abgewiesen.'

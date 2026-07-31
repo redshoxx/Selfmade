@@ -244,26 +244,28 @@ VITE_SUPABASE_URL=https://dein-projekt.supabase.co
 VITE_SUPABASE_ANON_KEY=sb_publishable_…
 ```
 
-**4. Anmeldung freischalten.** Unter *Authentication → Providers* muss *Email*
-aktiv sein. Ein Passwort braucht niemand.
+**4. Eure beiden Konten anlegen.** *Authentication → Users → Add user → Create
+new user*. E-Mail und ein Passwort eintragen, **Häkchen bei „Auto Confirm
+User“**. Einmal für dich, einmal für deine Freundin – dieselben Adressen wie in
+Schritt 2.
 
-Dann – und das ist der Schritt, den man leicht übersieht – unter
-*Authentication → Email Templates* in **beiden** Vorlagen (*Magic Link* und
-*Confirm signup*) den Code sichtbar machen. Eine Zeile genügt:
+Das Häkchen ist der Punkt, an dem die E-Mail vollständig aus dem Spiel geht:
+Das Konto gilt sofort als bestätigt, es wird nichts verschickt und auf nichts
+gewartet.
 
-```html
-<p>Dein Code: <strong>{{ .Token }}</strong></p>
-```
+**5. Neuanmeldungen abschalten.** *Authentication → Providers → Email →
+„Allow new users to sign up“* **aus**.
 
-Warum das nötig ist, steht im nächsten Abschnitt.
+Danach existieren genau die zwei Konten, die du angelegt hast. Das ist kein
+Beiwerk: Der Schlüssel der App steht öffentlich im Repository, also könnte
+sonst jeder mit der Adresse der App ein Konto anlegen. An eure Daten käme er
+nicht – dafür sorgt die Zugangsliste –, aber gar nicht erst hineinzukommen ist
+sauberer.
 
-Unter *Authentication → URL Configuration* zuletzt die Adresse eintragen, unter
-der die App läuft – als *Site URL* und unter *Redirect URLs*.
+**6. Fertig.** In der App auf das Zahnrad → *Konto*, E-Mail und Passwort
+eintragen, *Anmelden*. Ab da ist alles gesichert und gemeinsam.
 
-**5. Fertig.** In der App auf das Zahnrad → *Konto*, E-Mail eintragen, Code aus
-der Mail eintippen. Ab da ist alles gesichert und gemeinsam.
-
-**6. Nachsehen, ob es trägt.** Im selben Blatt ganz unten: *Es kommt nichts
+**7. Nachsehen, ob es trägt.** Im selben Blatt ganz unten: *Es kommt nichts
 an? → Verbindung prüfen*:
 
 | Punkt | was er beantwortet |
@@ -316,20 +318,49 @@ verborgen. Die App sagt ihm das auch – siehe unten.
 
 ---
 
-## Anmelden mit Code statt mit Link
+## Anmelden mit Passwort
 
-Beim Anmelden verschickt Supabase eine Mail, die beides enthält: einen Link und
-einen sechsstelligen Code. Die App fragt nach dem Code.
+E-Mail und Passwort, sonst nichts. Beim Anmelden ist **keine E-Mail im Spiel** –
+kein Link, kein Code, kein Warten auf Post.
 
-Das ist keine Umständlichkeit, sondern der einzige Weg, der auf dem iPhone
-zuverlässig funktioniert. Eine vom Homescreen gestartete Web-App hat dort ihren
-**eigenen Speicher**, getrennt von Safari. Der Link in der Mail öffnet aber
-Safari – die Anmeldung landet dort und kommt in der App nie an. Man tippt, es
-passiert scheinbar nichts, und die App wirkt kaputt. Ein abgetippter Code
-bleibt, wo er eingegeben wurde.
+Das ist bewusst der langweilige Weg. Vorher lief die Anmeldung über einen Code
+aus einer Mail, und daran ist sie gescheitert:
 
-Der Link funktioniert weiterhin, wenn man die App im Browser benutzt. Zeigt die
-Mail keinen Code, fehlt `{{ .Token }}` in den Vorlagen – siehe Schritt 4 oben.
+- Der eingebaute Mailversand von Supabase ist auf wenige Nachrichten je Stunde
+  gedrosselt und wird häufig blockiert.
+- Ein Code gilt 60 Minuten. Kommt die Mail verspätet, ist er beim Eintippen tot.
+- Mails landen im Spam, und auf dem Telefon sieht man das oft gar nicht.
+- Ob überhaupt ein Code in der Mail steht, hängt an einer Vorlage im Dashboard.
+  Standardmäßig steht dort nur ein Link – und **der** funktioniert in einer vom
+  Homescreen gestarteten Web-App nicht: Sie hat auf dem iPhone ihren eigenen
+  Speicher, der Link öffnet aber Safari. Die Anmeldung landet dort und kommt in
+  der App nie an.
+
+Ein Passwort hat keine dieser Eigenschaften. Es steht nach dem ersten Mal im
+Schlüsselbund des Telefons und wird von da an eingesetzt, ohne dass jemand
+etwas tippt.
+
+**Passwort vergessen?** Es gibt keinen Zurücksetzen-Weg per Mail, weil es
+keinen Mailversand gibt. Stattdessen in Supabase unter *Authentication → Users*
+die Person anklicken und ein neues Passwort setzen. Zehn Sekunden, und du bist
+ohnehin der Einzige mit Zugang zum Projekt.
+
+---
+
+## Warum es kein „Konto anlegen“ in der App gibt
+
+Es wäre ein Feld mehr, und es wäre falsch.
+
+Die Zugangsliste entscheidet anhand der **E-Mail-Adresse**, wer die gemeinsame
+Einkaufsliste sieht. Das trägt nur, solange jemand seine Adresse auch wirklich
+besitzt – genau das prüft sonst die Bestätigungsmail.
+
+Böte die App ein Konto ohne Bestätigung an, könnte sich jemand mit *deiner*
+Adresse registrieren und stünde damit auf der Zugangsliste. Die Anmeldung wäre
+bequemer und die Zugangskontrolle wertlos.
+
+Zwei Konten von Hand anzulegen ist ein einmaliger Handgriff. Dass sie euch
+gehören, weißt du dann, weil du sie selbst angelegt hast.
 
 ---
 
@@ -372,11 +403,7 @@ Ohne sie baut die App zwar, läuft aber rein lokal – das Teilen fehlt dann.
 wie `dein-name.netlify.app` bereit; eine eigene Domain lässt sich später
 anhängen.
 
-**4. Adresse in Supabase nachtragen.** Unter *Authentication → URL
-Configuration* die neue Adresse als *Site URL* eintragen und unter *Redirect
-URLs* ergänzen. Ohne das führt der Anmeldelink aus der E-Mail ins Leere.
-
-**5. Auf dem Telefon einrichten.** Adresse im Browser öffnen, dann *Teilen → Zum
+**4. Auf dem Telefon einrichten.** Adresse im Browser öffnen, dann *Teilen → Zum
 Home-Bildschirm* (iPhone) bzw. *Zum Startbildschirm hinzufügen* (Android).
 Danach läuft die App im Vollbild und offline.
 
@@ -409,7 +436,7 @@ steht in der Monatssumme ein Cent, den niemand erklären kann.
 ```sh
 npm install
 npm run dev        # Entwicklungsserver auf Port 5173
-npm test           # 222 Tests
+npm test           # 227 Tests
 npm run typecheck
 npm run build      # Produktionsbündel nach dist/
 npm run build:single  # alles in einer HTML-Datei, nach dist-single/
@@ -418,7 +445,7 @@ npm run build:single  # alles in einer HTML-Datei, nach dist-single/
 `build:single` packt CSS und JavaScript in eine einzige Seite. Zum Herzeigen
 genügt dann eine Datei – doppelklicken, fertig, ohne Server und ohne
 Installation. Für den täglichen Gebrauch ist das nicht der Weg: Eine einzelne
-Datei bekommt keine Aktualisierungen, und der Anmeldelink findet nicht zurück.
+Datei bekommt keine Aktualisierungen.
 
 Die Symbole werden nicht mitgeliefert, sondern erzeugt:
 
@@ -452,7 +479,7 @@ supabase/
 ```
 
 Die Rechenlogik liegt vollständig in `lib/` und ist ohne Oberfläche testbar –
-alle 222 Tests laufen ohne Browser. Was in den Views steht, ist Darstellung.
+alle 227 Tests laufen ohne Browser. Was in den Views steht, ist Darstellung.
 
 ### Auf dem Telefon
 
