@@ -1,4 +1,4 @@
-import { today } from './date'
+import { today, type IsoDate } from './date'
 import { newId } from './id'
 import { isValidCents } from './money'
 import type {
@@ -134,10 +134,21 @@ export type Action =
   | { type: 'shop/toggle'; id: string }
   | { type: 'shop/remove'; id: string }
   | { type: 'shop/clearDone' }
-  | { type: 'shop/finishTrip'; order: AisleId[] }
+  /**
+   * Einkauf abschließen. `inDenVorrat` nennt die Vorratsposten, die durch
+   * diesen Einkauf hochzuzählen sind – berechnet von `vorratsZugaenge()`.
+   */
+  | { type: 'shop/finishTrip'; order: AisleId[]; inDenVorrat: { pantryId: string; menge: number }[] }
   | { type: 'pantry/add'; item: Omit<PantryItem, keyof Entity> }
   | { type: 'pantry/update'; id: string; patch: Partial<Omit<PantryItem, keyof Entity>> }
   | { type: 'pantry/remove'; id: string }
+  /** Bestand auf 0 und in einem Zug auf die Einkaufsliste. */
+  | { type: 'pantry/aufgebraucht'; id: string; addedBy: string }
+  /** Neu Gekauftes in den Vorrat aufnehmen, beim Auspacken. */
+  | {
+      type: 'pantry/ausEinkauf'
+      items: { name: string; aisle: AisleId; qty: number; unit: string; bestBefore: IsoDate | null }[]
+    }
   | { type: 'note/add'; note: Omit<Note, keyof Entity> }
   | { type: 'note/update'; id: string; patch: Partial<Omit<Note, keyof Entity>> }
   | { type: 'note/remove'; id: string }
@@ -405,11 +416,26 @@ export function reducer(state: State, action: Action): State {
         ),
       }
     }
+    /**
+     * Einkauf abschließen: lernen, den Vorrat hochzählen, aufräumen.
+     *
+     * Alle drei zusammen in einer Aktion. Würde erst gebucht und dann
+     * aufgeräumt, zählte ein Abbruch dazwischen doppelt – die Einträge wären
+     * noch da und beim nächsten Abschließen ein zweites Mal dabei.
+     */
     case 'shop/finishTrip': {
       const now = Date.now()
+      const zugaenge = new Map(action.inDenVorrat.map((z) => [z.pantryId, z.menge]))
       return {
         ...state,
         aisleOrder: learnAisleOrder(state.aisleOrder, action.order),
+        pantryItems: state.pantryItems.map((item) => {
+          const menge = zugaenge.get(item.id)
+          if (menge === undefined || item.deletedAt !== null) return item
+          // Auf zwei Nachkommastellen: „0,5 kg“ dreimal ergäbe sonst
+          // 1.5000000000000002.
+          return { ...item, qty: Math.round((item.qty + menge) * 100) / 100, updatedAt: now }
+        }),
         shopItems: state.shopItems.map((i) =>
           i.done && i.deletedAt === null ? { ...i, deletedAt: now, updatedAt: now } : i,
         ),
@@ -426,6 +452,61 @@ export function reducer(state: State, action: Action): State {
     case 'pantry/remove': {
       const pantryItems = tombstone(state.pantryItems, action.id)
       return pantryItems === state.pantryItems ? state : { ...state, pantryItems }
+    }
+    /**
+     * Aufgebraucht – Bestand auf 0 und in einem Zug auf die Einkaufsliste.
+     *
+     * Beides zusammen, weil das die Absicht ist: Wer im Vorrat „aufgebraucht“
+     * tippt, steht vor dem leeren Fach und will es nachkaufen. Das an den
+     * Mindestbestand zu hängen wäre eine versteckte Kopplung – der steht
+     * voreingestellt auf 0 („nie erinnern“), und dann täte der Tipp sichtbar
+     * gar nichts.
+     *
+     * Bewusst kein Löschen: Einheit, Abteilung und Mindestbestand bleiben
+     * stehen, und beim nächsten Einkauf zählt `shop/finishTrip` über
+     * `pantryId` genau diesen Posten wieder hoch.
+     */
+    case 'pantry/aufgebraucht': {
+      const posten = state.pantryItems.find((i) => i.id === action.id && i.deletedAt === null)
+      if (!posten) return state
+
+      const pantryItems = patchItem(state.pantryItems, action.id, { qty: 0, bestBefore: null })
+
+      // Steht es schon auf der Liste, bleibt es bei dem einen Eintrag – zwei
+      // Zeilen „Milch“ helfen im Laden niemandem.
+      const schonDrauf = state.shopItems.some(
+        (i) =>
+          i.deletedAt === null &&
+          (i.pantryId === posten.id || i.name.trim().toLowerCase() === posten.name.trim().toLowerCase()),
+      )
+      if (schonDrauf) return { ...state, pantryItems }
+
+      const neu: ShopItem = {
+        name: posten.name,
+        qty: posten.minQty > 0 ? String(posten.minQty) : '',
+        aisle: posten.aisle,
+        done: false,
+        addedBy: action.addedBy,
+        pantryId: posten.id,
+        note: '',
+        priceCents: null,
+        ...stamp(),
+      }
+      return { ...state, pantryItems, shopItems: [neu, ...state.shopItems] }
+    }
+    case 'pantry/ausEinkauf': {
+      if (action.items.length === 0) return state
+      const neue = action.items.map((item) => ({
+        name: item.name,
+        aisle: item.aisle,
+        qty: item.qty,
+        unit: item.unit,
+        minQty: 0,
+        bestBefore: item.bestBefore,
+        note: '',
+        ...stamp(),
+      }))
+      return { ...state, pantryItems: [...neue, ...state.pantryItems] }
     }
 
     /* --- Notizen --- */

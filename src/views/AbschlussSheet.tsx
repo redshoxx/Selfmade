@@ -3,7 +3,7 @@ import { Sheet } from '../components/Sheet'
 import { today } from '../lib/date'
 import { frequentCategories } from '../lib/finance'
 import { formatMoney } from '../lib/money'
-import { observedOrder } from '../lib/shopping'
+import { observedOrder, vorratsZugaenge } from '../lib/shopping'
 import { live } from '../lib/store'
 import { useApp } from '../lib/useApp'
 
@@ -24,6 +24,10 @@ export function AbschlussSheet({ onClose }: { onClose: () => void }) {
   const done = useMemo(() => live(state.shopItems).filter((item) => item.done), [state.shopItems])
   const priced = done.filter((item) => item.priceCents !== null)
   const summe = priced.reduce((total, item) => total + (item.priceCents ?? 0), 0)
+
+  // Was dieser Einkauf für den Vorrat bedeutet: Bekanntes wird hochgezählt,
+  // Neues später beim Auspacken gefragt.
+  const zugaenge = useMemo(() => vorratsZugaenge(state, done), [state, done])
 
   const categories = useMemo(() => frequentCategories(state, 'ausgabe', 99), [state])
   const [buchen, setBuchen] = useState(summe > 0)
@@ -46,8 +50,12 @@ export function AbschlussSheet({ onClose }: { onClose: () => void }) {
         },
       })
     }
-    // Reihenfolge lernen und Abgehaktes wegräumen.
-    dispatch({ type: 'shop/finishTrip', order: observedOrder(state.shopItems) })
+    // Reihenfolge lernen, den Vorrat hochzählen und Abgehaktes wegräumen.
+    dispatch({
+      type: 'shop/finishTrip',
+      order: observedOrder(state.shopItems),
+      inDenVorrat: zugaenge.hochzaehlen,
+    })
     onClose()
   }
 
@@ -107,9 +115,16 @@ export function AbschlussSheet({ onClose }: { onClose: () => void }) {
         </button>
       </div>
 
+      {/* Ohne Rückfrage, aber auch nicht heimlich: Wer wissen will, was mit
+          dem Vorrat passiert, liest es hier. An der Kasse eine Liste mit
+          Häkchen durchzugehen wäre Reibung am schlechtesten Moment. */}
       <p className="small muted" style={{ marginTop: 12 }}>
         Abgehaktes wird von der Liste genommen. Die Reihenfolge der Abteilungen merkt sich die App
         für den nächsten Einkauf.
+        {zugaenge.hochzaehlen.length > 0 &&
+          ` ${zugaenge.hochzaehlen.length === 1 ? '1 Posten wird' : `${zugaenge.hochzaehlen.length} Posten werden`} im Vorrat hochgezählt.`}
+        {zugaenge.neu.length > 0 &&
+          ` ${zugaenge.neu.length === 1 ? 'Ein neues Produkt wartet' : `${zugaenge.neu.length} neue Produkte warten`} im Vorrat auf dich – mit Datum, wenn du auspackst.`}
       </p>
     </Sheet>
   )

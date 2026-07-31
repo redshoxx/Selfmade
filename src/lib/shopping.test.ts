@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { aisleRank, findExisting, groupForShopping, observedOrder, orderedAisles, shopCounts, suggestions } from './shopping'
+import {
+  aisleRank,
+  findExisting,
+  groupForShopping,
+  neuGekauft,
+  observedOrder,
+  orderedAisles,
+  shopCounts,
+  suggestions,
+  vorratsZugaenge,
+} from './shopping'
 import { initialState, reducer } from './store'
-import type { AisleId, ShopItem, State } from './types'
+import type { AisleId, PantryItem, ShopItem, State } from './types'
 
 function item(over: Partial<ShopItem> & Pick<ShopItem, 'id' | 'name'>): ShopItem {
   return {
@@ -122,7 +132,7 @@ describe('observedOrder', () => {
       item({ id: '1', name: 'Wasser', aisle: 'getraenke', done: true, updatedAt: 300 }),
       item({ id: '2', name: 'Apfel', aisle: 'obst', done: true, updatedAt: 100 }),
     ])
-    state = reducer(state, { type: 'shop/finishTrip', order: observedOrder(state.shopItems) })
+    state = reducer(state, { type: 'shop/finishTrip', order: observedOrder(state.shopItems), inDenVorrat: [] })
     expect(aisleRank(state, 'obst')).toBeLessThan(aisleRank(state, 'getraenke'))
   })
 })
@@ -172,5 +182,142 @@ describe('suggestions', () => {
       item({ id: '2', name: 'Milch', deletedAt: 10 }),
     ])
     expect(suggestions(state, '')).toEqual([])
+  })
+})
+
+describe('vorratsZugaenge', () => {
+  const einkauf = (over: Partial<ShopItem> = {}): ShopItem => ({
+    id: 'a',
+    name: 'Milch',
+    qty: '2',
+    aisle: 'kuehl',
+    done: true,
+    addedBy: 'Ich',
+    pantryId: null,
+    note: '',
+    priceCents: null,
+    updatedAt: 1000,
+    deletedAt: null,
+    ...over,
+  })
+
+  const vorrat = (over: Partial<PantryItem> = {}): PantryItem => ({
+    id: 'v1',
+    name: 'Milch',
+    aisle: 'kuehl',
+    qty: 1,
+    unit: 'l',
+    minQty: 1,
+    bestBefore: null,
+    note: '',
+    updatedAt: 1000,
+    deletedAt: null,
+    ...over,
+  })
+
+  it('zählt hoch, was aus einem Nachkaufen-Vorschlag kam', () => {
+    const state = { shopItems: [einkauf({ pantryId: 'v1' })], pantryItems: [vorrat()] }
+    const { hochzaehlen, neu } = vorratsZugaenge(state)
+
+    expect(hochzaehlen).toEqual([{ pantryId: 'v1', menge: 2 }])
+    expect(neu).toEqual([])
+  })
+
+  it('findet den Posten auch über den Namen', () => {
+    // Wer „Milch“ von Hand aufschreibt, obwohl sie im Vorrat steht, soll
+    // keinen zweiten Posten desselben Produkts bekommen.
+    const state = { shopItems: [einkauf({ pantryId: null, name: 'milch ' })], pantryItems: [vorrat()] }
+    const { hochzaehlen, neu } = vorratsZugaenge(state)
+
+    expect(hochzaehlen).toEqual([{ pantryId: 'v1', menge: 2 }])
+    expect(neu).toEqual([])
+  })
+
+  it('meldet Unbekanntes als neu, mit Menge und Einheit', () => {
+    const state = { shopItems: [einkauf({ name: 'Mehl', qty: '500 g', aisle: 'trocken' })], pantryItems: [] }
+    const { hochzaehlen, neu } = vorratsZugaenge(state)
+
+    expect(hochzaehlen).toEqual([])
+    expect(neu).toEqual([
+      { shopId: 'a', name: 'Mehl', aisle: 'trocken', menge: 500, einheit: 'g' },
+    ])
+  })
+
+  it('zählt eine undeutbare Menge als eins', () => {
+    // „ein Karton Milch“ ist mehr als nichts. Null zu buchen wäre schlechter
+    // als ungenau zu buchen.
+    const state = { shopItems: [einkauf({ qty: 'ein Karton', pantryId: 'v1' })], pantryItems: [vorrat()] }
+    expect(vorratsZugaenge(state).hochzaehlen).toEqual([{ pantryId: 'v1', menge: 1 }])
+  })
+
+  it('lässt Nicht-Abgehaktes in Ruhe', () => {
+    const state = { shopItems: [einkauf({ done: false, pantryId: 'v1' })], pantryItems: [vorrat()] }
+    const { hochzaehlen, neu } = vorratsZugaenge(state)
+    expect(hochzaehlen).toEqual([])
+    expect(neu).toEqual([])
+  })
+})
+
+describe('neuGekauft', () => {
+  const gekauft = (over: Partial<ShopItem> = {}): ShopItem => ({
+    id: 'a',
+    name: 'Mehl',
+    qty: '500 g',
+    aisle: 'trocken',
+    done: true,
+    addedBy: 'Ich',
+    pantryId: null,
+    note: '',
+    priceCents: null,
+    updatedAt: 1000,
+    deletedAt: 1000,
+    ...over,
+  })
+
+  it('bietet an, was gerade gekauft wurde und nicht im Vorrat steht', () => {
+    const liste = neuGekauft({ shopItems: [gekauft()], pantryItems: [] }, 1000)
+    expect(liste).toEqual([
+      { shopId: 'a', name: 'Mehl', aisle: 'trocken', menge: 500, einheit: 'g' },
+    ])
+  })
+
+  it('lässt weg, was schon im Vorrat liegt', () => {
+    // So räumt sich der Streifen nach dem Übernehmen von selbst ab – ohne
+    // dass irgendwo ein „erledigt“-Vermerk gespeichert werden müsste.
+    const vorrat = {
+      id: 'v1',
+      name: 'Mehl',
+      aisle: 'trocken' as const,
+      qty: 1,
+      unit: 'kg',
+      minQty: 0,
+      bestBefore: null,
+      note: '',
+      updatedAt: 1,
+      deletedAt: null,
+    }
+    expect(neuGekauft({ shopItems: [gekauft()], pantryItems: [vorrat] }, 1000)).toEqual([])
+  })
+
+  it('vergisst Älteres von selbst', () => {
+    const vorVierTagen = 1000 - 4 * 24 * 60 * 60 * 1000
+    expect(neuGekauft({ shopItems: [gekauft({ deletedAt: vorVierTagen })], pantryItems: [] }, 1000)).toEqual([])
+  })
+
+  it('zeigt denselben Namen nur einmal', () => {
+    const liste = neuGekauft(
+      {
+        shopItems: [gekauft({ id: 'alt', qty: '1 kg', deletedAt: 500 }), gekauft({ id: 'neu', deletedAt: 900 })],
+        pantryItems: [],
+      },
+      1000,
+    )
+    expect(liste).toHaveLength(1)
+    expect(liste[0]!.shopId).toBe('neu')
+  })
+
+  it('lässt Weggeworfenes aus, das nie gekauft wurde', () => {
+    // Ein gelöschter, nie abgehakter Eintrag ist kein Einkauf.
+    expect(neuGekauft({ shopItems: [gekauft({ done: false })], pantryItems: [] }, 1000)).toEqual([])
   })
 })

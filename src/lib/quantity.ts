@@ -133,6 +133,25 @@ export function parseEntry(input: string): ParsedEntry {
 }
 
 /**
+ * Eine Freitext-Menge in Zahl und Einheit zerlegen.
+ *
+ * `"500 g"` → `{ amount: 500, unit: 'g' }`, `"2"` → `{ amount: 2, unit: '' }`,
+ * `"ein Karton"` → `null`.
+ *
+ * Steht hier und nicht dort, wo sie gebraucht wird: Der Vorrat rechnet mit
+ * Zahlen, die Liste mit Freitext, und zwischen beiden muss übersetzt werden.
+ * Ein zweiter Parser daneben würde unweigerlich anders raten als dieser – und
+ * dann zählte der Vorrat etwas anderes hoch, als auf der Liste stand.
+ */
+export function splitQuantity(text: string): { amount: number; unit: string } | null {
+  const match = text.trim().match(/^(\d+(?:[.,]\d+)?)\s*(.*)$/)
+  if (!match) return null
+  const amount = Number(match[1]!.replace(',', '.'))
+  if (!Number.isFinite(amount)) return null
+  return { amount, unit: match[2]!.trim() }
+}
+
+/**
  * Menge um `delta` verändern – für die −/+ Schaltflächen in der Liste.
  *
  * Greift nur, wenn die Menge mit einer Zahl beginnt. Bei „1 Packung“ zählt die
@@ -182,16 +201,10 @@ export function mergeQuantities(existing: string, added: string): string {
   if (!a) return b
   if (!b) return a
 
-  const split = (text: string) => {
-    const match = text.match(/^(\d+(?:[.,]\d+)?)\s*(.*)$/)
-    if (!match) return null
-    const amount = Number(match[1]!.replace(',', '.'))
-    return Number.isFinite(amount) ? { amount, unit: match[2]!.trim().toLowerCase() } : null
-  }
-
-  const left = split(a)
-  const right = split(b)
-  if (!left || !right || left.unit !== right.unit) return a
+  // Kleingeschrieben vergleichen: „2 Packung“ und „2 packung“ sind dasselbe.
+  const left = splitQuantity(a)
+  const right = splitQuantity(b)
+  if (!left || !right || left.unit.toLowerCase() !== right.unit.toLowerCase()) return a
 
   const total = Math.round((left.amount + right.amount) * 100) / 100
   const unit = a.match(/^\d+(?:[.,]\d+)?\s*(.*)$/)?.[1]?.trim() ?? ''

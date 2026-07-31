@@ -1,4 +1,5 @@
 import { AISLES, DEFAULT_AISLE_ORDER, aisle, type Aisle } from './aisles'
+import { splitQuantity } from './quantity'
 import { live } from './store'
 import type { AisleId, ShopItem, State } from './types'
 
@@ -144,4 +145,126 @@ export function suggestions(state: Pick<State, 'shopItems'>, query: string, limi
     .sort((a, b) => (b.count === a.count ? b.last - a.last : b.count - a.count))
     .slice(0, limit)
     .map((entry) => entry.name)
+}
+
+/* --- Vom Einkauf in den Vorrat -------------------------------------------- */
+
+/** Ein Posten, der im Vorrat schon liegt und nur hochgezählt wird. */
+export interface Zugang {
+  pantryId: string
+  menge: number
+}
+
+/** Etwas Gekauftes, das es im Vorrat noch nicht gibt. */
+export interface NeuGekauft {
+  /** Kennung des Einkaufseintrags – damit die Oberfläche ihn wiederfindet. */
+  shopId: string
+  name: string
+  aisle: AisleId
+  menge: number
+  einheit: string
+}
+
+export interface Vorratszugaenge {
+  hochzaehlen: Zugang[]
+  neu: NeuGekauft[]
+}
+
+/**
+ * Was der abgeschlossene Einkauf für den Vorrat bedeutet.
+ *
+ * Die Trennung ist der Kern: Ein Eintrag mit `pantryId` kam aus einem
+ * Nachkaufen-Vorschlag. Das Produkt liegt also bereits im Vorrat, mit Einheit
+ * und Mindestbestand – da lässt sich ohne Rückfrage hochzählen, es kann nichts
+ * schiefgehen. Alles andere ist eine Vermutung und wird deshalb später gefragt,
+ * beim Auspacken, wenn man das Produkt in der Hand hält.
+ *
+ * Ließe man auch das Neue automatisch einlaufen, stünden Coffee-to-go und das
+ * Brötchen von heute Morgen als „Vorrat“ da. Ein Vorrat voller Dinge, die keine
+ * sind, ist so unbrauchbar wie gar keiner.
+ */
+export function vorratsZugaenge(
+  state: Pick<State, 'shopItems' | 'pantryItems'>,
+  gekauft: readonly ShopItem[] = live(state.shopItems).filter((item) => item.done),
+): Vorratszugaenge {
+  const imVorrat = new Map(live(state.pantryItems).map((item) => [item.id, item]))
+  const nachName = new Map(
+    live(state.pantryItems).map((item) => [item.name.trim().toLowerCase(), item]),
+  )
+
+  const hochzaehlen: Zugang[] = []
+  const neu: NeuGekauft[] = []
+
+  for (const item of gekauft) {
+    const geteilt = splitQuantity(item.qty)
+    // Unklare Menge zählt als eins: „ein Karton Milch“ ist mehr als nichts,
+    // und null zu buchen wäre schlechter als ungenau zu buchen.
+    const menge = geteilt && geteilt.amount > 0 ? geteilt.amount : 1
+
+    // Erst über die Kennung, dann über den Namen. Der zweite Weg fängt den
+    // Fall, dass jemand „Milch“ von Hand aufgeschrieben hat, obwohl sie im
+    // Vorrat steht – sonst entstünde ein zweiter Posten desselben Produkts.
+    const treffer = (item.pantryId ? imVorrat.get(item.pantryId) : undefined)
+      ?? nachName.get(item.name.trim().toLowerCase())
+
+    if (treffer) hochzaehlen.push({ pantryId: treffer.id, menge })
+    else {
+      neu.push({
+        shopId: item.id,
+        name: item.name.trim(),
+        aisle: item.aisle,
+        menge,
+        einheit: geteilt?.unit || 'Stück',
+      })
+    }
+  }
+
+  return { hochzaehlen, neu }
+}
+
+/**
+ * Was zuletzt gekauft wurde und noch nicht im Vorrat steht.
+ *
+ * Speist den Streifen „neu gekauft“ im Vorrat – gedacht für den Augenblick,
+ * in dem man die Tüten auspackt und das Produkt in der Hand hält. Erst da
+ * kennt man das Mindesthaltbarkeitsdatum, und erst da weiß man, ob es
+ * überhaupt Vorrat ist oder heute noch gegessen wird.
+ *
+ * Braucht kein neues Feld: Abgehakte Einträge bleiben nach dem Abschließen als
+ * Grabsteine liegen, mit Name, Menge und Zeitpunkt. Es braucht auch kein
+ * Wegklicken – der Streifen räumt sich von selbst ab. Wer das Produkt
+ * übernimmt, dessen Name findet danach einen Vorratsposten und fällt heraus;
+ * alles andere fällt nach `tage` heraus.
+ */
+export function neuGekauft(
+  state: Pick<State, 'shopItems' | 'pantryItems'>,
+  jetzt: number = Date.now(),
+  tage = 3,
+): NeuGekauft[] {
+  const grenze = jetzt - tage * 24 * 60 * 60 * 1000
+  const imVorrat = new Set(live(state.pantryItems).map((i) => i.name.trim().toLowerCase()))
+
+  // Je Name nur der jüngste Kauf: Zwei Wochen hintereinander Milch ergäbe
+  // sonst zwei gleiche Zeilen im Streifen.
+  const jeName = new Map<string, ShopItem>()
+  for (const item of state.shopItems) {
+    if (!item.done || item.deletedAt === null || item.deletedAt < grenze) continue
+    const key = item.name.trim().toLowerCase()
+    if (!key || imVorrat.has(key)) continue
+    const bisher = jeName.get(key)
+    if (!bisher || item.deletedAt > (bisher.deletedAt ?? 0)) jeName.set(key, item)
+  }
+
+  return Array.from(jeName.values())
+    .sort((a, b) => (b.deletedAt ?? 0) - (a.deletedAt ?? 0))
+    .map((item) => {
+      const geteilt = splitQuantity(item.qty)
+      return {
+        shopId: item.id,
+        name: item.name.trim(),
+        aisle: item.aisle,
+        menge: geteilt && geteilt.amount > 0 ? geteilt.amount : 1,
+        einheit: geteilt?.unit || 'Stück',
+      }
+    })
 }

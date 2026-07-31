@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Empty, Field, TapRow } from '../components/Bits'
 import { IconPlus, IconTrash } from '../components/Icons'
 import { Sheet } from '../components/Sheet'
+import { neuGekauft, type NeuGekauft } from '../lib/shopping'
 import { AISLES, aisle, guessAisle } from '../lib/aisles'
 import { formatExpiry, today } from '../lib/date'
 import {
@@ -36,6 +37,12 @@ export function VorratView({ startFilter }: { startFilter?: PantryFilter }) {
   const [filter, setFilter] = useState<PantryFilter>(startFilter ?? 'ablauf')
   const [open, setOpen] = useState<PantryItem | null>(null)
   const [creating, setCreating] = useState(false)
+  const [uebernehmen, setUebernehmen] = useState<NeuGekauft | null>(null)
+
+  // Was gerade gekauft wurde und noch nicht im Vorrat steht. Der Streifen
+  // räumt sich von selbst ab: Übernommenes findet danach seinen Posten,
+  // alles andere fällt nach drei Tagen heraus.
+  const frisch = useMemo(() => neuGekauft(state), [state])
 
   const counts = pantryCounts(state)
   const all = useMemo(() => pantryEntries(state), [state])
@@ -54,6 +61,29 @@ export function VorratView({ startFilter }: { startFilter?: PantryFilter }) {
             Anlegen
           </button>
         </div>
+
+        {frisch.length > 0 && (
+          <>
+            <h2 className="section" style={{ marginTop: 0 }}>
+              Neu gekauft
+            </h2>
+            <div className="card">
+              {frisch.slice(0, 6).map((eintrag) => (
+                <TapRow
+                  key={eintrag.shopId}
+                  title={eintrag.name}
+                  sub={`${trimNumber(eintrag.menge)} ${eintrag.einheit} · in den Vorrat`}
+                  leading={<span aria-hidden="true">{aisle(eintrag.aisle).emoji}</span>}
+                  onClick={() => setUebernehmen(eintrag)}
+                />
+              ))}
+            </div>
+            <p className="small muted" style={{ margin: '8px 2px 16px' }}>
+              Tipp drauf, trag das Mindesthaltbarkeitsdatum ein – fertig. Was du nicht übernimmst,
+              verschwindet hier von selbst.
+            </p>
+          </>
+        )}
 
         {counts.urgent > 0 && (
           <div className="notice notice-bad">
@@ -126,6 +156,9 @@ export function VorratView({ startFilter }: { startFilter?: PantryFilter }) {
       <UndoBar state={undo} onDismiss={dismiss} />
 
       {creating && <PantrySheet onClose={() => setCreating(false)} />}
+      {uebernehmen && (
+        <PantrySheet vorschlag={uebernehmen} onClose={() => setUebernehmen(null)} />
+      )}
       {open && (
         <PantrySheet
           item={open}
@@ -149,10 +182,18 @@ function trimNumber(value: number): string {
 
 function PantrySheet({
   item,
+  vorschlag,
   onClose,
   onDelete,
 }: {
   item?: PantryItem
+  /**
+   * Vorbelegung aus einem gerade getätigten Einkauf.
+   *
+   * Name, Abteilung und Menge stehen damit schon da – offen bleibt genau das
+   * eine, was der Einkauf nicht wissen kann: das Mindesthaltbarkeitsdatum.
+   */
+  vorschlag?: { name: string; aisle: AisleId; menge: number; einheit: string }
   onClose: () => void
   /** Läuft über die Ansicht, weil nur dort der Rückgängig-Streifen lebt. */
   onDelete?: () => void
@@ -160,15 +201,16 @@ function PantrySheet({
   const { state, dispatch } = useApp()
   const current = item ? live(state.pantryItems).find((i) => i.id === item.id) ?? item : undefined
 
-  const [name, setName] = useState(current?.name ?? '')
-  const [qty, setQty] = useState(String(current?.qty ?? 1))
-  const [unit, setUnit] = useState(current?.unit ?? 'Stück')
+  const [name, setName] = useState(current?.name ?? vorschlag?.name ?? '')
+  const [qty, setQty] = useState(String(current?.qty ?? vorschlag?.menge ?? 1))
+  const [unit, setUnit] = useState(current?.unit ?? vorschlag?.einheit ?? 'Stück')
   const [minQty, setMinQty] = useState(String(current?.minQty ?? 0))
   const [bestBefore, setBestBefore] = useState(current?.bestBefore ?? '')
   const [note, setNote] = useState(current?.note ?? '')
-  const [aisleId, setAisleId] = useState<AisleId>(current?.aisle ?? 'sonstiges')
+  const [aisleId, setAisleId] = useState<AisleId>(current?.aisle ?? vorschlag?.aisle ?? 'sonstiges')
   // Solange niemand die Abteilung von Hand gewählt hat, folgt sie dem Namen.
-  const [aisleTouched, setAisleTouched] = useState(Boolean(current))
+  // Bei einem Vorschlag steht sie schon fest – sie kam vom Einkaufseintrag.
+  const [aisleTouched, setAisleTouched] = useState(Boolean(current) || Boolean(vorschlag))
 
   const parsedQty = Number(qty.replace(',', '.'))
   const parsedMin = Number(minQty.replace(',', '.'))
@@ -194,7 +236,7 @@ function PantrySheet({
 
   return (
     <Sheet
-      title={current ? 'Produkt' : 'Produkt anlegen'}
+      title={current ? 'Produkt' : vorschlag ? 'In den Vorrat' : 'Produkt anlegen'}
       onClose={onClose}
       action={
         current &&
@@ -301,6 +343,29 @@ function PantrySheet({
           </button>
         ))}
       </div>
+
+      {/* Aufgebraucht statt Löschen: Der Posten bleibt mit Einheit, Abteilung
+          und Mindestbestand stehen und taucht dadurch von selbst unter
+          „Nachkaufen“ auf. Gelöscht müsste man beim nächsten Einkauf alles
+          neu eintippen. */}
+      {current && current.qty > 0 && (
+        <div className="btn-row">
+          <button
+            type="button"
+            className="btn btn-wide"
+            onClick={() => {
+              dispatch({
+                type: 'pantry/aufgebraucht',
+                id: current.id,
+                addedBy: state.settings.displayName,
+              })
+              onClose()
+            }}
+          >
+            Aufgebraucht – auf die Liste
+          </button>
+        </div>
+      )}
 
       <div className="btn-row">
         <button type="button" className="btn btn-primary btn-wide" onClick={save} disabled={!canSave}>

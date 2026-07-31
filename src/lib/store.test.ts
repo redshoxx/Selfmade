@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { vorratsZugaenge } from './shopping'
 import { hasChangesSince, initialState, live, loadState, mergeState, reducer, slotAmount, SYNC_LISTS } from './store'
 import type { Challenge, PantryItem, Pot, ShopItem, State, Tx } from './types'
 
@@ -295,7 +296,7 @@ describe('Einkauf', () => {
 
   it('lernt aus dem Einkauf die Reihenfolge der Abteilungen', () => {
     let state = withItem(initialState(), 'Milch')
-    state = reducer(state, { type: 'shop/finishTrip', order: ['getraenke', 'obst', 'kuehl'] })
+    state = reducer(state, { type: 'shop/finishTrip', order: ['getraenke', 'obst', 'kuehl'], inDenVorrat: [] })
     const order = state.aisleOrder
     // Beim ersten Einkauf wird die beobachtete Folge direkt übernommen.
     expect(order.getraenke).toBe(0)
@@ -305,9 +306,9 @@ describe('Einkauf', () => {
 
   it('lässt einen einzelnen Einkauf die gelernte Reihenfolge nicht umwerfen', () => {
     let state = initialState()
-    state = reducer(state, { type: 'shop/finishTrip', order: ['obst', 'kuehl'] })
+    state = reducer(state, { type: 'shop/finishTrip', order: ['obst', 'kuehl'], inDenVorrat: [] })
     // Ein einzelner abweichender Einkauf soll die Sortierung nur anschubsen.
-    state = reducer(state, { type: 'shop/finishTrip', order: ['kuehl', 'obst'] })
+    state = reducer(state, { type: 'shop/finishTrip', order: ['kuehl', 'obst'], inDenVorrat: [] })
     expect(state.aisleOrder.obst!).toBeGreaterThan(0)
     expect(state.aisleOrder.obst!).toBeLessThan(1)
     expect(state.aisleOrder.obst!).toBeLessThan(state.aisleOrder.kuehl!)
@@ -548,5 +549,144 @@ describe('mergeState mit Kategorien', () => {
     const meiner = initialState()
     const merged = mergeState(meiner, { categories: [], prefsUpdatedAt: Date.now() })
     expect(merged.categories.length).toBe(meiner.categories.length)
+  })
+})
+
+describe('Der Kreis Einkauf → Vorrat', () => {
+  const mitVorrat = (over: Partial<PantryItem> = {}): State => ({
+    ...initialState(),
+    pantryItems: [
+      {
+        id: 'v1',
+        name: 'Milch',
+        aisle: 'kuehl',
+        qty: 1,
+        unit: 'l',
+        minQty: 2,
+        bestBefore: null,
+        note: '',
+        updatedAt: 1,
+        deletedAt: null,
+        ...over,
+      },
+    ],
+  })
+
+  it('zählt hoch und räumt auf – in einem Zug', () => {
+    // Beides muss zusammen passieren. Würde erst gebucht und dann aufgeräumt,
+    // zählte ein Abbruch dazwischen beim nächsten Abschließen doppelt.
+    let state = mitVorrat()
+    state = reducer(state, {
+      type: 'shop/add',
+      item: {
+        name: 'Milch',
+        qty: '2',
+        aisle: 'kuehl',
+        done: true,
+        addedBy: 'Ich',
+        pantryId: 'v1',
+        note: '',
+        priceCents: null,
+      },
+    })
+
+    state = reducer(state, {
+      type: 'shop/finishTrip',
+      order: ['kuehl'],
+      inDenVorrat: [{ pantryId: 'v1', menge: 2 }],
+    })
+
+    expect(state.pantryItems[0]!.qty).toBe(3)
+    expect(live(state.shopItems)).toHaveLength(0)
+  })
+
+  it('rechnet mit Nachkommastellen sauber', () => {
+    // 0,5 dreimal ergäbe sonst 1.5000000000000002.
+    let state = mitVorrat({ qty: 0 })
+    for (let i = 0; i < 3; i++) {
+      state = reducer(state, {
+        type: 'shop/finishTrip',
+        order: [],
+        inDenVorrat: [{ pantryId: 'v1', menge: 0.5 }],
+      })
+    }
+    expect(state.pantryItems[0]!.qty).toBe(1.5)
+  })
+
+  it('lässt einen gelöschten Vorratsposten in Ruhe', () => {
+    let state = mitVorrat({ deletedAt: 5 })
+    state = reducer(state, {
+      type: 'shop/finishTrip',
+      order: [],
+      inDenVorrat: [{ pantryId: 'v1', menge: 2 }],
+    })
+    expect(state.pantryItems[0]!.qty).toBe(1)
+  })
+
+  it('nimmt Neues beim Auspacken auf', () => {
+    const state = reducer(initialState(), {
+      type: 'pantry/ausEinkauf',
+      items: [{ name: 'Mehl', aisle: 'trocken', qty: 500, unit: 'g', bestBefore: '2026-12-01' }],
+    })
+    expect(live(state.pantryItems)).toHaveLength(1)
+    expect(state.pantryItems[0]!.name).toBe('Mehl')
+    expect(state.pantryItems[0]!.bestBefore).toBe('2026-12-01')
+  })
+
+  it('setzt Aufgebrauchtes auf 0 und schreibt es auf die Liste', () => {
+    // Der Posten muss bleiben – Einheit, Abteilung und Mindestbestand werden
+    // beim nächsten Einkauf gebraucht. Und der Eintrag muss auf die Liste:
+    // Wer „aufgebraucht“ tippt, steht vor dem leeren Fach.
+    const vorher = mitVorrat({ bestBefore: '2026-08-01' })
+    const state = reducer(vorher, { type: 'pantry/aufgebraucht', id: 'v1', addedBy: 'Ich' })
+
+    expect(state.pantryItems[0]!.qty).toBe(0)
+    expect(state.pantryItems[0]!.deletedAt).toBeNull()
+    expect(state.pantryItems[0]!.minQty).toBe(2)
+    // Das alte Datum gehörte zur alten Packung und wäre jetzt eine Falschmeldung.
+    expect(state.pantryItems[0]!.bestBefore).toBeNull()
+
+    expect(live(state.shopItems)).toHaveLength(1)
+    expect(live(state.shopItems)[0]!.name).toBe('Milch')
+    // Über `pantryId` findet `vorratsZugaenge` beim nächsten Einkauf zurück.
+    expect(live(state.shopItems)[0]!.pantryId).toBe('v1')
+  })
+
+  it('hängt nichts doppelt auf die Liste', () => {
+    // Zwei Zeilen „Milch“ helfen im Laden niemandem.
+    let state = mitVorrat()
+    state = reducer(state, {
+      type: 'shop/add',
+      item: {
+        name: 'Milch',
+        qty: '',
+        aisle: 'kuehl',
+        done: false,
+        addedBy: 'Freundin',
+        pantryId: null,
+        note: '',
+        priceCents: null,
+      },
+    })
+    state = reducer(state, { type: 'pantry/aufgebraucht', id: 'v1', addedBy: 'Ich' })
+
+    expect(live(state.shopItems)).toHaveLength(1)
+    expect(state.pantryItems[0]!.qty).toBe(0)
+  })
+
+  it('macht den ganzen Kreis: aufgebraucht, gekauft, wieder voll', () => {
+    let state = mitVorrat({ qty: 3 })
+    state = reducer(state, { type: 'pantry/aufgebraucht', id: 'v1', addedBy: 'Ich' })
+    expect(state.pantryItems[0]!.qty).toBe(0)
+
+    const aufDerListe = live(state.shopItems)[0]!
+    state = reducer(state, { type: 'shop/update', id: aufDerListe.id, patch: { qty: '2' } })
+    state = reducer(state, { type: 'shop/toggle', id: aufDerListe.id })
+
+    const { hochzaehlen } = vorratsZugaenge(state)
+    state = reducer(state, { type: 'shop/finishTrip', order: ['kuehl'], inDenVorrat: hochzaehlen })
+
+    expect(state.pantryItems[0]!.qty).toBe(2)
+    expect(live(state.shopItems)).toHaveLength(0)
   })
 })

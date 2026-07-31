@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bumpQuantity, isBumpable, mergeQuantities, parseEntry } from './quantity'
+import { bumpQuantity, isBumpable, mergeQuantities, parseEntry, splitQuantity } from './quantity'
 
 describe('parseEntry', () => {
   it('liest die Menge vor dem Namen', () => {
@@ -139,5 +139,21 @@ describe('mergeQuantities', () => {
 
   it('lässt Freitext unangetastet', () => {
     expect(mergeQuantities('nach Bedarf', '2')).toBe('nach Bedarf')
+  })
+})
+
+describe('splitQuantity', () => {
+  it('zerlegt in Zahl und Einheit', () => {
+    expect(splitQuantity('500 g')).toEqual({ amount: 500, unit: 'g' })
+    expect(splitQuantity('1,5 l')).toEqual({ amount: 1.5, unit: 'l' })
+    expect(splitQuantity('2')).toEqual({ amount: 2, unit: '' })
+    expect(splitQuantity('  3 Packung ')).toEqual({ amount: 3, unit: 'Packung' })
+  })
+
+  it('gibt auf, wo nichts zu holen ist', () => {
+    // Lieber `null` als geraten: Der Vorrat bucht daraufhin 1, und das ist
+    // eine bewusste Entscheidung an einer Stelle statt einer geratenen hier.
+    expect(splitQuantity('ein Karton')).toBeNull()
+    expect(splitQuantity('')).toBeNull()
   })
 })
