@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   entries,
+  erinnerung,
   expiryOf,
   filterEntries,
   isLow,
@@ -200,5 +201,77 @@ describe('pantryHeadline', () => {
 
   it('schweigt, wenn nichts zu tun ist', () => {
     expect(pantryHeadline({ urgent: 0, soon: 0, low: 0, total: 9 })).toBeNull()
+  })
+})
+
+describe('erinnerung', () => {
+  const vorrat = (over: Partial<PantryItem> = {}): PantryItem => ({
+    id: 'v1',
+    name: 'Joghurt',
+    aisle: 'kuehl',
+    qty: 1,
+    unit: 'Becher',
+    minQty: 0,
+    bestBefore: null,
+    note: '',
+    updatedAt: 1,
+    deletedAt: null,
+    ...over,
+  })
+
+  it('meldet, was jetzt weg muss', () => {
+    // Kühlregal warnt ab 5 Tagen, dringend ab 2.
+    const state = { pantryItems: [vorrat({ bestBefore: '2026-08-02' })] }
+    const meldung = erinnerung(state, '2026-08-01')
+
+    expect(meldung).not.toBeNull()
+    expect(meldung!.titel).toBe('Joghurt muss weg')
+    expect(meldung!.produkte).toHaveLength(1)
+  })
+
+  it('schweigt bei „bald“', () => {
+    // Eine Konserve, die in vier Wochen abläuft, ist der Anfang vom
+    // Wegklicken – auch wenn die App sie zu Recht gelb markiert.
+    const state = { pantryItems: [vorrat({ aisle: 'konserven', bestBefore: '2026-08-20' })] }
+    expect(erinnerung(state, '2026-08-01')).toBeNull()
+  })
+
+  it('schweigt, wenn nichts drängt', () => {
+    // Eine tägliche „alles in Ordnung“-Meldung erzieht dazu, sie zu übersehen.
+    expect(erinnerung({ pantryItems: [vorrat({ bestBefore: '2027-01-01' })] }, '2026-08-01')).toBeNull()
+    expect(erinnerung({ pantryItems: [] }, '2026-08-01')).toBeNull()
+    expect(erinnerung({ pantryItems: [vorrat()] }, '2026-08-01')).toBeNull()
+  })
+
+  it('lässt leere Fächer aus', () => {
+    // Was aufgebraucht ist, kann nicht verderben – das Datum steht nur noch da.
+    const state = { pantryItems: [vorrat({ qty: 0, bestBefore: '2026-07-01' })] }
+    expect(erinnerung(state, '2026-08-01')).toBeNull()
+  })
+
+  it('nennt bei vielen höchstens drei Namen', () => {
+    const state = {
+      pantryItems: [
+        vorrat({ id: 'a', name: 'Joghurt', bestBefore: '2026-08-01' }),
+        vorrat({ id: 'b', name: 'Quark', bestBefore: '2026-08-01' }),
+        vorrat({ id: 'c', name: 'Sahne', bestBefore: '2026-08-01' }),
+        vorrat({ id: 'd', name: 'Butter', bestBefore: '2026-08-01' }),
+      ],
+    }
+    const meldung = erinnerung(state, '2026-08-01')!
+
+    expect(meldung.titel).toBe('4 Sachen müssen weg')
+    expect(meldung.text).toContain('und 1 mehr')
+    expect(meldung.produkte).toHaveLength(4)
+  })
+
+  it('sagt dazu, was schon abgelaufen ist', () => {
+    const state = {
+      pantryItems: [
+        vorrat({ id: 'a', name: 'Joghurt', bestBefore: '2026-07-28' }),
+        vorrat({ id: 'b', name: 'Quark', bestBefore: '2026-08-02' }),
+      ],
+    }
+    expect(erinnerung(state, '2026-08-01')!.text).toContain('1 schon abgelaufen')
   })
 })

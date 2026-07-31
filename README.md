@@ -31,6 +31,7 @@ Die Trennung ist der Kern des Datenmodells und nicht verhandelbar:
    Spar-Challenges              Notizzettel
    Wiederkehrende Buchungen     Einkaufs-Vorlagen
    Kategorien und Budgets       Reihenfolge der Abteilungen
+   Angemeldete Geräte
 ```
 
 Wer zusammen einkauft, muss dafür nicht sein Gehalt offenlegen. Durchgesetzt
@@ -113,6 +114,100 @@ Löschen fragt nicht nach, sondern lässt sich zurücknehmen: Nach jedem Lösche
 steht sieben Sekunden lang „Rückgängig“ über der Reiterleiste. Eine Rückfrage
 bremst jedes Mal, ein Rückgängig nur im Fehlerfall. Auf dem Telefon geht das
 auch per Wischen nach links.
+
+---
+
+## Der Kreis: Einkauf füllt den Vorrat
+
+Ein Vorrat, den man von Hand pflegen muss, ist nach zwei Wochen falsch – und
+mit ihm die Ablauf-Ampel und die Nachkaufen-Vorschläge. Deshalb schließt sich
+der Kreis von selbst, aufgeteilt in zwei Augenblicke:
+
+**An der Kasse, ohne Rückfrage.** Beim *Einkauf abschließen* zählt jeder
+abgehakte Eintrag, den es im Vorrat schon gibt, seinen Posten hoch. Erkannt
+wird über die Herkunft (der Eintrag kam aus einem Nachkaufen-Vorschlag) oder
+über den Namen. „2 Milch“ abgehakt heißt: zwei mehr im Kühlschrank.
+
+**Zu Hause, beim Auspacken.** Was neu ist, wartet im Vorrat unter *Neu gekauft*.
+Ein Tipp öffnet ein Blatt mit vorbelegtem Namen, Menge und Abteilung – offen
+bleibt genau das, was der Einkauf nicht wissen kann: das Datum auf der
+Packung. Der Streifen räumt sich von selbst ab; was du nicht übernimmst,
+verschwindet nach drei Tagen.
+
+Warum nicht alles automatisch: Dann stünden der Coffee-to-go und das Brötchen
+von heute Morgen als „Vorrat“ da. Ein Vorrat voller Dinge, die keine sind, ist
+so unbrauchbar wie gar keiner.
+
+**Andersherum:** Im Vorratsblatt setzt *Aufgebraucht – auf die Liste* den
+Bestand auf 0 und schreibt das Produkt in einem Zug auf die Einkaufsliste.
+Gelöscht wird nichts – Einheit, Abteilung und Mindestbestand bleiben stehen,
+und beim nächsten Einkauf findet die App über sie zurück.
+
+---
+
+## Erinnerungen, wenn etwas ablaufen will
+
+Die Ablauf-Ampel wirkt nur, wenn man die App zufällig öffnet. Deshalb meldet
+sich das Telefon von selbst: einmal abends, und **nur wenn wirklich etwas weg
+muss**.
+
+Die Stufe „läuft bald ab“ bleibt bewusst still. Bei Konserven umfasst sie
+30 Tage, und eine Meldung über eine Dose, die in vier Wochen abläuft, ist der
+Anfang vom Wegklicken. Gibt es nichts, kommt nichts – eine tägliche
+„alles in Ordnung“-Meldung erzieht nur dazu, sie zu übersehen.
+
+Welche Produkte drängen, entscheidet `erinnerung()` in `src/lib/pantry.ts` –
+dieselbe Funktion, die auch die App benutzt. Die Regel steht **nicht** ein
+zweites Mal in SQL: Zwei Fassungen driften auseinander, und dann warnt die App
+anders als das Telefon, ohne dass es jemandem auffällt. Ein Test hält fest,
+dass diese Datei ohne Browser läuft, damit sie das auch auf dem Server kann.
+
+### Einrichten
+
+Nötig ist eine eigene Adresse. Über einen fremden Rahmen (etwa einen geteilten
+Vorschau-Link) geht es nicht, und auf dem iPhone greift Push ausschließlich in
+der Fassung vom Home-Bildschirm.
+
+**1. Schlüsselpaar erzeugen.**
+
+```sh
+npx web-push generate-vapid-keys
+```
+
+**2. Hinterlegen.** Beide Werte als Secrets in Supabase, den öffentlichen
+zusätzlich beim Hoster:
+
+```sh
+supabase secrets set VAPID_PUBLIC_KEY=… VAPID_PRIVATE_KEY=… VAPID_SUBJECT=mailto:du@…
+```
+
+| wo | Name | Wert |
+| --- | --- | --- |
+| Supabase Secrets | `VAPID_PUBLIC_KEY` | der öffentliche |
+| Supabase Secrets | `VAPID_PRIVATE_KEY` | der private |
+| Supabase Secrets | `VAPID_SUBJECT` | `mailto:deine@adresse.de` |
+| Netlify | `VITE_VAPID_PUBLIC_KEY` | der **öffentliche** |
+
+> Der private Schlüssel gehört ausschließlich in die Supabase-Secrets. Niemals
+> ins Repository, niemals zum Hoster, niemals in ein Bündel.
+
+**3. Funktion veröffentlichen und Zeitplan anlegen.**
+
+```sh
+supabase functions deploy ablauf-erinnerung
+```
+
+Dann in Supabase unter *Database → Extensions* `pg_cron` und `pg_net`
+einschalten und `supabase/schema.sql` erneut ausführen – dort steht der
+Zeitplan. Im Block „Die abendliche Erinnerung“ muss die Adresse deines
+Projekts stehen; das Skript sagt dir per Hinweis Bescheid, wenn sie fehlt.
+
+**4. In der App einschalten.** Zahnrad → Konto → *Erinnerungen*. Die Frage nach
+der Erlaubnis kommt vom Telefon.
+
+Lehnst du dort einmal ab, fragt der Browser **nie wieder** – das lässt sich nur
+in den Einstellungen des Telefons zurücknehmen. Die App sagt das dann auch,
+statt eine Schaltfläche anzubieten, die nichts mehr täte.
 
 ---
 
@@ -436,7 +531,7 @@ steht in der Monatssumme ein Cent, den niemand erklären kann.
 ```sh
 npm install
 npm run dev        # Entwicklungsserver auf Port 5173
-npm test           # 227 Tests
+npm test           # 254 Tests
 npm run typecheck
 npm run build      # Produktionsbündel nach dist/
 npm run build:single  # alles in einer HTML-Datei, nach dist-single/
@@ -470,17 +565,20 @@ src/
     quantity.ts     Menge und Name trennen, zusammenzählen, hoch- und runterzählen
     recurring.ts    Fällige Termine wiederkehrender Buchungen
     diagnose.ts     Verbindungsprüfung: was fehlt und was zu tun ist
+    entity.ts       Grabsteine – getrennt vom Speicher, damit der Server es nutzen kann
+    push.ts         Erinnerungen an- und abmelden
     sync.ts         Übersetzung Datenbank ↔ App, Hoch- und Runterladen, Zugangsliste
     useApp.tsx      Zustand, Anmeldung und Abgleich als Kontext
   views/            Ein Bereich je Datei
   components/       Wiederverwendbare Bausteine
 supabase/
-  schema.sql        Tabellen, Zugriffsregeln, Zugangsliste
+  schema.sql        Tabellen, Zugriffsregeln, Zugangsliste, Zeitplan
+  functions/        Edge Function für die abendliche Erinnerung
   pruefung/         Schema gegen ein echtes Postgres fahren (siehe dortige README)
 ```
 
 Die Rechenlogik liegt vollständig in `lib/` und ist ohne Oberfläche testbar –
-alle 227 Tests laufen ohne Browser. Was in den Views steht, ist Darstellung.
+alle 254 Tests laufen ohne Browser. Was in den Views steht, ist Darstellung.
 
 ### Auf dem Telefon
 

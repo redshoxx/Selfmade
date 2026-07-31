@@ -11,7 +11,7 @@
  * Anfragen an Supabase laufen bewusst am Service Worker vorbei – Daten sollen
  * nie aus einem Cache kommen, sonst zeigt die App Bestände von gestern.
  */
-const VERSION = 'v1'
+const VERSION = 'v2'
 const SHELL = `selfmade-shell-${VERSION}`
 const ASSETS = `selfmade-assets-${VERSION}`
 
@@ -40,6 +40,61 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('message', (event) => {
   if (event.data === 'skip-waiting') self.skipWaiting()
+})
+
+/* --- Erinnerungen ---------------------------------------------------------- */
+
+/**
+ * Eine Meldung vom Server anzeigen.
+ *
+ * Der Inhalt kommt fertig formuliert an – ausgewählt und formuliert wird in
+ * `erinnerung()` in `src/lib/pantry.ts`, damit App und Benachrichtigung
+ * dieselbe Regel benutzen. Hier wird nur noch dargestellt.
+ *
+ * `tag` sorgt dafür, dass eine neue Meldung die alte ersetzt statt sich
+ * danebenzustellen: Nach einer Woche Urlaub sonst sieben Zettel übereinander.
+ */
+self.addEventListener('push', (event) => {
+  let daten = {}
+  try {
+    daten = event.data ? event.data.json() : {}
+  } catch {
+    // Kaputte Nutzlast: lieber eine schlichte Meldung als gar keine.
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(daten.titel || 'Selfmade', {
+      body: daten.text || 'Sieh im Vorrat nach.',
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      tag: 'ablauf',
+      lang: 'de',
+      data: { url: daten.url || '/?tab=vorrat&filter=ablauf' },
+    }),
+  )
+})
+
+/**
+ * Antippen führt dorthin, wovon die Meldung handelt.
+ *
+ * Erst nachsehen, ob die App schon offen ist. Ein zweites Fenster neben einem
+ * bestehenden zu öffnen, ist auf dem Telefon nicht nur unnötig – man landet
+ * dann in einer zweiten Ausfertigung derselben App.
+ */
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const ziel = event.notification.data?.url || '/?tab=vorrat&filter=ablauf'
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((fenster) => {
+      for (const client of fenster) {
+        if (client.url.includes(self.location.origin)) {
+          return client.focus().then(() => client.navigate?.(ziel))
+        }
+      }
+      return self.clients.openWindow(ziel)
+    }),
+  )
 })
 
 self.addEventListener('fetch', (event) => {

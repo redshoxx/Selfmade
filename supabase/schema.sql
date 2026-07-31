@@ -59,10 +59,11 @@ create table if not exists public.erlaubte_personen (
 --  anlegt. Ohne diesen Schritt kommt niemand an die gemeinsamen Daten – die
 --  eigenen Buchungen kann trotzdem jeder führen.
 --
---  Die Adressen stehen bewusst nicht schon hier: Diese Datei liegt im
---  Repository, und eine private E-Mail-Adresse gehört nicht dorthin, nur weil
---  es bequemer wäre. Sie stehen nach dem Ausführen ausschließlich in eurer
---  eigenen Datenbank.
+--  Diese Datei liegt im Repository – die Adressen hier stehen also so
+--  öffentlich wie das Repository selbst. Sie geben für sich genommen keinen
+--  Zugang: Dazu braucht es ein Konto samt Passwort, und Neuanmeldungen sind
+--  abgeschaltet. Wer das Repository öffentlich stellt, gibt damit trotzdem
+--  zwei E-Mail-Adressen preis.
 --
 --  Später geht es auch ohne SQL: in der App unter Zahnrad → Konto → „Wer
 --  mitliest“. Einmal muss es aber hier sein, sonst gibt es niemanden, der
@@ -275,6 +276,29 @@ create table if not exists public.user_prefs (
 );
 
 -- ---------------------------------------------------------------------------
+--  Geräte für Erinnerungen
+--
+--  Je Gerät eine Zeile, nicht je Person: Wer die App auf Telefon und Tablet
+--  hat, bekommt die Meldung auf beiden – und meldet eines ab, ohne dass das
+--  andere verstummt.
+--
+--  `endpoint` ist der Schlüssel. Er kommt vom Push-Dienst des Browsers und ist
+--  weltweit eindeutig; eine eigene Kennung daneben wäre nur eine zweite
+--  Wahrheit über dasselbe Gerät.
+-- ---------------------------------------------------------------------------
+
+create table if not exists public.push_geraete (
+  endpoint   text primary key,
+  user_id    uuid not null references auth.users (id) on delete cascade,
+  p256dh     text not null,
+  auth       text not null,
+  angelegt   timestamptz not null default now(),
+  zuletzt_ok timestamptz
+);
+
+create index if not exists push_geraete_user_idx on public.push_geraete (user_id);
+
+-- ---------------------------------------------------------------------------
 --  Umstellung von der Haushalts-Fassung
 --
 --  Wer ein älteres Schema eingespielt hat, hat `household_id`-Spalten und zwei
@@ -356,6 +380,7 @@ alter table public.pot_entries       enable row level security;
 alter table public.challenges        enable row level security;
 alter table public.recurring_txs     enable row level security;
 alter table public.user_prefs        enable row level security;
+alter table public.push_geraete      enable row level security;
 
 -- Geteilte Tabellen: alles für Freigeschaltete, nichts für alle anderen.
 do $$
@@ -380,7 +405,8 @@ do $$
 declare
   t text;
 begin
-  foreach t in array array['txs', 'pots', 'pot_entries', 'challenges', 'recurring_txs', 'user_prefs'] loop
+  foreach t in array array['txs', 'pots', 'pot_entries', 'challenges', 'recurring_txs', 'user_prefs',
+                           'push_geraete'] loop
     execute format('drop policy if exists %I_all on public.%I', t, t);
     execute format(
       'create policy %I_all on public.%I for all to authenticated
@@ -448,6 +474,68 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
+--  Die abendliche Erinnerung
+--
+--  Ruft einmal täglich die Edge Function `ablauf-erinnerung` auf. Die
+--  entscheidet, ob es überhaupt etwas zu melden gibt – und schweigt, wenn
+--  nicht. Eine tägliche „alles in Ordnung“-Meldung erzieht nur dazu, sie zu
+--  übersehen.
+--
+--  Zwei Voraussetzungen, die du vorher erledigt haben musst:
+--    1. Die Funktion ist veröffentlicht (`supabase functions deploy`).
+--    2. Die VAPID-Schlüssel liegen in den Secrets.
+--  Fehlt eines davon, läuft der Zeitplan trotzdem und die Funktion antwortet
+--  mit einer Fehlermeldung – es geht nichts kaputt.
+--
+--  Der Block ist übersprungbar: Wer die Erinnerungen (noch) nicht will, lässt
+--  ihn einfach beim Markieren weg. Alles andere im Skript funktioniert ohne.
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  projekt text;
+begin
+  if to_regproc('cron.schedule') is null then
+    raise notice 'pg_cron ist nicht aktiv – Erinnerungen übersprungen. Einschalten unter Database → Extensions.';
+    return;
+  end if;
+
+  -- Die Adresse des eigenen Projekts steht in den Einstellungen der Datenbank.
+  -- Sie hier hart einzutragen hieße, das Skript für jedes Projekt zu ändern.
+  projekt := current_setting('app.settings.project_url', true);
+  if projekt is null or projekt = '' then
+    -- Supabase setzt das nicht überall. Dann trag die Adresse hier ein:
+    projekt := 'https://DEIN-PROJEKT.supabase.co';
+  end if;
+
+  if projekt like '%DEIN-PROJEKT%' then
+    raise notice 'Adresse des Projekts oben im Erinnerungs-Block eintragen, dann erneut ausführen.';
+    return;
+  end if;
+
+  -- Wiederholbar: erst abbestellen, dann neu bestellen.
+  perform cron.unschedule('selfmade-ablauf-erinnerung')
+  where exists (select 1 from cron.job where jobname = 'selfmade-ablauf-erinnerung');
+
+  -- 18:00 deutscher Zeit. In der Datenbank läuft alles in UTC, im Winter also
+  -- 17:00, im Sommer 16:00 – hier steht der Winterwert. Abends passt: Man
+  -- kocht oder plant den nächsten Tag, und was heute weg muss, hat noch einen
+  -- Abend Zeit.
+  perform cron.schedule(
+    'selfmade-ablauf-erinnerung',
+    '0 17 * * *',
+    format(
+      $befehl$select net.http_post(
+        url := %L,
+        headers := jsonb_build_object('Content-Type', 'application/json')
+      )$befehl$,
+      projekt || '/functions/v1/ablauf-erinnerung'
+    )
+  );
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
 --  Abschluss: was jetzt dasteht
 --
 --  Der SQL-Editor zeigt das Ergebnis der letzten Abfrage. Diese hier ist
@@ -464,7 +552,9 @@ select
   email as "darf mitlesen",
   name as "angezeigt als",
   case
-    when email in ('djmctweets@gmail.com', 'wolfgangdilena1996@gmail.com')
+    -- Bewusst die Platzhalter-Adressen, nicht eure echten: Der Hinweis soll
+    -- ja gerade dann erscheinen, wenn oben noch die Vorlage steht.
+    when email in ('deine@adresse.de', 'ihre@adresse.de')
       then '⚠ Platzhalter – oben im Skript ersetzen und noch einmal ausführen'
     else '✓ eingetragen'
   end as "Stand"

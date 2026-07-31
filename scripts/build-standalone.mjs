@@ -80,7 +80,9 @@ ${body}
  * jedes Haushalts. Im fertigen Bündel steht alles im Klartext, und ein stiller
  * Fehlgriff wäre hier teuer. Deshalb bricht der Bau lieber ab.
  */
-const verboten = [/sb_secret_[A-Za-z0-9_-]{10,}/, /service_role/]
+// Der private VAPID-Schlüssel gehört dazu: Wer ihn hat, kann Meldungen im
+// Namen dieser App auf eure Telefone schicken.
+const verboten = [/sb_secret_[A-Za-z0-9_-]{10,}/, /service_role/, /VAPID_PRIVATE_KEY/]
 for (const muster of verboten) {
   const treffer = body.match(muster)
   if (treffer) {

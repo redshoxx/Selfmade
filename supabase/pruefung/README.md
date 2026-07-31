@@ -9,13 +9,14 @@ schlimmsten Fall mittendrin, mit halb umgestellter Datenbank:
 - `drop table households` scheiterte, weil `create_household()` diese Tabelle
   als Rückgabetyp hat – die Funktionen mussten zuerst weg.
 
-Deshalb liegen hier drei Skripte. Sie brauchen kein Supabase, nur ein Postgres.
+Deshalb liegen hier vier Skripte. Sie brauchen kein Supabase, nur ein Postgres.
 
 | Datei | wofür |
 | --- | --- |
 | `00-supabase-nachbau.sql` | Das Wenige, das `schema.sql` voraussetzt: `auth.users`, `auth.uid()`, `auth.jwt()`, die Rollen `anon`/`authenticated`, die Realtime-Publikation |
 | `01-zugriffsregeln.sql` | Wer sieht was: zwei Freigeschaltete, ein Fremder – und dass jeder nur seine eigenen Buchungen sieht |
 | `02-zugangsliste.sql` | Die Zugangsliste selbst: dazunehmen, berichtigen, sich nicht selbst aussperren, und dass ein Fremder sich nicht einträgt |
+| `03-erinnerungen.sql` | Die Gerätetabelle für Benachrichtigungen: Ein Gerät gehört genau einer Person und niemand sonst |
 
 ## Durchlauf
 
@@ -37,10 +38,15 @@ $P -d neu -f supabase/schema.sql
 # 3. Zugriffsregeln
 $P -d neu -f supabase/pruefung/01-zugriffsregeln.sql
 $P -d neu -f supabase/pruefung/02-zugangsliste.sql
+$P -d neu -f supabase/pruefung/03-erinnerungen.sql
 ```
 
-Erwartet: kein `ERROR` außer den beiden, die im Skript 02 ausdrücklich
-provoziert werden – dort *muss* die Datenbank ablehnen.
+Erwartet: kein `ERROR` außer denen, die in 02 und 03 ausdrücklich provoziert
+werden – dort *muss* die Datenbank ablehnen.
+
+Ohne die Erweiterung `pg_cron` überspringt `schema.sql` den Zeitplan für die
+Erinnerungen und sagt das per `NOTICE`. Das ist so gewollt: Alles andere
+funktioniert auch ohne.
 
 ## Umstieg von einer älteren Fassung
 

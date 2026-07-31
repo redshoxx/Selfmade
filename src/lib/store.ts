@@ -1,4 +1,7 @@
 import { today, type IsoDate } from './date'
+// Weiterhin von hier zu beziehen – die Rechenlogik holt es direkt aus
+// `entity.ts`, damit sie nicht am Browser-Speicher hängt.
+export { live } from './entity'
 import { newId } from './id'
 import { isValidCents } from './money'
 import type {
@@ -220,10 +223,7 @@ function tombstone<T extends Entity>(list: T[], id: string): T[] {
   return patchItem(list, id, { deletedAt: Date.now() } as Partial<T>)
 }
 
-/** Sichtbare Einträge: alles ohne Grabstein. */
-export function live<T extends Entity>(list: readonly T[]): T[] {
-  return list.filter((item) => item.deletedAt === null)
-}
+
 
 /**
  * Gewichteter Mittelwert für die gelernte Ladenreihenfolge.

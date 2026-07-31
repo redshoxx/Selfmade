@@ -1,6 +1,6 @@
 import { AISLES, DEFAULT_AISLE_ORDER, aisle, type Aisle } from './aisles'
 import { splitQuantity } from './quantity'
-import { live } from './store'
+import { live } from './entity'
 import type { AisleId, ShopItem, State } from './types'
 
 /**

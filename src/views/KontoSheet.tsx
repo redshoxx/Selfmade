@@ -3,6 +3,14 @@ import { Field, TapRow } from '../components/Bits'
 import { IconTrash, IconUsers } from '../components/Icons'
 import { Sheet } from '../components/Sheet'
 import { pruefeVerbindung, type CheckResult } from '../lib/diagnose'
+import {
+  pushAusschalten,
+  pushEinschalten,
+  pushMoeglich,
+  pushText,
+  pushZustand,
+  type PushZustand,
+} from '../lib/push'
 import { entfernePerson, erlaubePerson, ladeErlaubte } from '../lib/sync'
 import { live } from '../lib/store'
 import { supabase } from '../lib/supabase'
@@ -31,6 +39,9 @@ export function KontoSheet({ onClose }: { onClose: () => void }) {
   const [neueAdresse, setNeueAdresse] = useState('')
   const [neuerName, setNeuerName] = useState('')
 
+  const [erinnerung, setErinnerung] = useState<PushZustand | null>(null)
+  const [erinnerungFehler, setErinnerungFehler] = useState<string | null>(null)
+
   const bereit = email.includes('@') && passwort.length > 0
 
   const run = async (task: () => Promise<void>) => {
@@ -56,6 +67,10 @@ export function KontoSheet({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     void ladeListe()
   }, [ladeListe])
+
+  useEffect(() => {
+    if (session) void pushZustand().then(setErinnerung)
+  }, [session])
 
   return (
     <Sheet title="Konto" onClose={onClose}>
@@ -248,6 +263,57 @@ export function KontoSheet({ onClose }: { onClose: () => void }) {
           <span aria-hidden="true">!</span>
           <span>{cloudError}</span>
         </div>
+      )}
+
+      {/* Erinnerungen. Ohne sie wirkt die Ablauf-Ampel nur, wenn man die App
+          zufällig öffnet – und genau dann denkt man nicht an sie. */}
+      {session && pushMoeglich() && erinnerung !== null && (
+        <>
+          <h2 className="section">Erinnerungen</h2>
+          <div className="card pad">
+            <div className="spread">
+              <span>
+                Wenn etwas abläuft
+                <span className="row-sub">Abends, und nur wenn wirklich etwas weg muss</span>
+              </span>
+              <button
+                type="button"
+                className={`btn${erinnerung === 'an' ? ' btn-primary' : ''}`}
+                disabled={busy || erinnerung === 'abgelehnt'}
+                aria-pressed={erinnerung === 'an'}
+                style={{ minWidth: 74 }}
+                onClick={() =>
+                  run(async () => {
+                    if (!supabase || !session) return
+                    setErinnerungFehler(null)
+                    try {
+                      setErinnerung(
+                        erinnerung === 'an'
+                          ? await pushAusschalten(supabase)
+                          : await pushEinschalten(supabase, session.userId),
+                      )
+                    } catch (fehler) {
+                      setErinnerungFehler(
+                        fehler instanceof Error ? fehler.message : 'Das hat nicht geklappt.',
+                      )
+                      setErinnerung(await pushZustand())
+                    }
+                  })
+                }
+              >
+                {erinnerung === 'an' ? 'An' : 'Aus'}
+              </button>
+            </div>
+            <p className="small muted" style={{ marginTop: 10, marginBottom: 0 }}>
+              {pushText(erinnerung)}
+            </p>
+            {erinnerungFehler && (
+              <p className="small" style={{ color: 'var(--bad)', marginBottom: 0 }}>
+                {erinnerungFehler}
+              </p>
+            )}
+          </div>
+        </>
       )}
 
       {/* Der Abgleich läuft im Hintergrund; läuft er nicht, sieht man dem

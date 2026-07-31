@@ -1,6 +1,6 @@
 import { aisle } from './aisles'
 import { daysBetween, today, type IsoDate } from './date'
-import { live } from './store'
+import { live } from './entity'
 import type { AisleId, PantryItem, State } from './types'
 
 /**
@@ -206,4 +206,57 @@ export function pantryHeadline(counts: PantryCounts): string | null {
     return counts.low === 1 ? '1 Produkt geht zur Neige' : `${counts.low} Produkte gehen zur Neige`
   }
   return null
+}
+
+/* --- Erinnerung ----------------------------------------------------------- */
+
+export interface Erinnerung {
+  /** Was in der Meldung steht, fertig formuliert. */
+  titel: string
+  text: string
+  /** Die betroffenen Produkte – für Tests und zum Nachsehen. */
+  produkte: PantryItem[]
+}
+
+/**
+ * Woran heute zu erinnern ist – oder `null`, wenn an nichts.
+ *
+ * Läuft in der App **und** in der Edge Function, die abends die
+ * Benachrichtigung verschickt. Genau deshalb steht sie hier und nicht in SQL:
+ * Zwei Fassungen derselben Regel driften auseinander, und dann warnt die App
+ * anders als das Telefon – ein Fehler, den niemand bemerkt, weil beide für
+ * sich plausibel aussehen.
+ *
+ * Bewusst **ohne** die Stufe `bald`. Bei Konserven umfasst die 30 Tage, und
+ * eine Meldung über eine Dose, die in vier Wochen abläuft, ist der Anfang vom
+ * Wegklicken. Und gibt es nichts, kommt nichts: Eine tägliche
+ * „alles-in-Ordnung“-Meldung erzieht dazu, sie zu übersehen.
+ */
+export function erinnerung(
+  state: Pick<State, 'pantryItems'>,
+  now: IsoDate = today(),
+): Erinnerung | null {
+  const dringend = entries(state, now)
+    .filter((e) => e.expiry.state === 'abgelaufen' || e.expiry.state === 'dringend')
+    // Leere Fächer nicht melden: Was aufgebraucht ist, kann nicht verderben.
+    .filter((e) => e.item.qty > 0)
+
+  if (dringend.length === 0) return null
+
+  const sortiert = sortEntries(dringend)
+  const namen = sortiert.map((e) => e.item.name)
+  const abgelaufen = sortiert.filter((e) => e.expiry.state === 'abgelaufen').length
+
+  return {
+    titel:
+      dringend.length === 1
+        ? `${namen[0]} muss weg`
+        : `${dringend.length} Sachen müssen weg`,
+    // Höchstens drei Namen: Was länger ist, schneidet das Telefon ohnehin ab.
+    text:
+      namen.slice(0, 3).join(', ') +
+      (namen.length > 3 ? ` und ${namen.length - 3} mehr` : '') +
+      (abgelaufen > 0 ? ` · ${abgelaufen === 1 ? '1 schon abgelaufen' : `${abgelaufen} schon abgelaufen`}` : ''),
+    produkte: sortiert.map((e) => e.item),
+  }
 }
