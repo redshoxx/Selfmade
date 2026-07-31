@@ -464,7 +464,7 @@ select
   email as "darf mitlesen",
   name as "angezeigt als",
   case
-    when email in ('deine@adresse.de', 'ihre@adresse.de')
+    when email in ('djmctweets@gmail.com', 'wolfgangdilena1996@gmail.com')
       then '⚠ Platzhalter – oben im Skript ersetzen und noch einmal ausführen'
     else '✓ eingetragen'
   end as "Stand"
