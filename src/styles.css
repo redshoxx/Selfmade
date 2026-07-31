@@ -1230,6 +1230,75 @@ h2.section {
   pointer-events: none;
 }
 
+/* --- Verbindungsprüfung --------------------------------------------------- */
+
+.check-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 13px;
+  background: var(--surface);
+}
+
+.check-mark {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: 1px;
+}
+
+.check-mark-ok {
+  background: var(--good-soft);
+  color: var(--good);
+}
+
+.check-mark-warnung {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.check-mark-fehler {
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+
+.check-mark-uebersprungen {
+  background: var(--surface-2);
+  color: var(--text-3);
+}
+
+.check-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.check-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.check-detail {
+  display: block;
+  font-size: 12.5px;
+  color: var(--text-2);
+  margin-top: 1px;
+}
+
 /* --- Einstiegskarten ------------------------------------------------------ */
 
 /* Der erste Bildschirm einer leeren App muss etwas anbieten, nicht nur etwas

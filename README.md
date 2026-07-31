@@ -33,10 +33,15 @@ Die Trennung ist der Kern des Datenmodells und nicht verhandelbar:
                                 Reihenfolge der Abteilungen
 ```
 
-Wer zusammen einkauft, muss dafür nicht sein Gehalt offenlegen. Die
-Einkaufsliste und der Vorrat gehören dem Haushalt, alles rund ums Geld bleibt
-bei der Person, die es eingetragen hat – auch auf dem Server, durchgesetzt über
-Zugriffsregeln in der Datenbank.
+Wer zusammen einkauft, muss dafür nicht sein Gehalt offenlegen. Einkaufsliste,
+Vorrat, Notizzettel und Vorlagen gehören dem Haushalt, alles rund ums Geld
+bleibt bei der Person, die es eingetragen hat – auch auf dem Server,
+durchgesetzt über Zugriffsregeln in der Datenbank.
+
+Änderungen auf einer Seite erscheinen binnen Sekunden auf der anderen; das gilt
+für alle vier geteilten Bereiche. Wer schon vor dem Teilen eine Liste geführt
+hat, dessen Einträge wandern beim Beitritt vollständig mit – die eigene Liste
+und die geteilte werden zusammengelegt.
 
 ---
 
@@ -245,6 +250,22 @@ der Form `K7M-2QD`. Den gibt deine Freundin bei sich unter *Beitreten* ein –
 ab dann sehen beide dieselbe Einkaufsliste und denselben Vorrat, Änderungen
 erscheinen binnen Sekunden auf dem anderen Gerät.
 
+**6. Nachsehen, ob es trägt.** In der App: Zahnrad → **Verbindung prüfen**. Die
+Liste geht Punkt für Punkt durch und nennt bei jedem Fehlschlag den nächsten
+Schritt:
+
+| Punkt | was er beantwortet |
+| --- | --- |
+| Zugangsdaten | Sind Adresse und Schlüssel hinterlegt? |
+| Server erreichbar | Antwortet das Projekt überhaupt? |
+| Angemeldet | Gilt die Sitzung? |
+| Tabellen | Ist `schema.sql` eingespielt? |
+| Haushalt | Gibt es einen – und wie viele Einträge liegen dort? |
+
+Der weitaus häufigste Grund, wenn nichts ankommt: Schritt 2 wurde übersprungen,
+die Tabellen fehlen. Die Prüfung sagt das dann ausdrücklich, statt pauschal
+„kein Kontakt zum Server“ zu behaupten – der Kontakt steht ja.
+
 > **Zu den Schlüsseln:** Supabase zeigt zwei. Der **publishable** (`sb_publishable_…`)
 > gehört in die App – er ist für den Browser gemacht und darf öffentlich sein.
 > Der **secret** (`sb_secret_…`) umgeht *sämtliche* Zugriffsregeln; wer ihn hat,
@@ -319,7 +340,7 @@ steht in der Monatssumme ein Cent, den niemand erklären kann.
 ```sh
 npm install
 npm run dev        # Entwicklungsserver auf Port 5173
-npm test           # 188 Tests
+npm test           # 205 Tests
 npm run typecheck
 npm run build      # Produktionsbündel nach dist/
 npm run build:single  # alles in einer HTML-Datei, nach dist-single/
@@ -351,6 +372,7 @@ src/
     challenges.ts   Challenge-Engine, Vorlagen, Fortschritt
     quantity.ts     Menge und Name trennen, zusammenzählen, hoch- und runterzählen
     recurring.ts    Fällige Termine wiederkehrender Buchungen
+    diagnose.ts     Verbindungsprüfung: was fehlt und was zu tun ist
     sync.ts         Übersetzung Datenbank ↔ App, Hoch- und Runterladen
     useApp.tsx      Zustand, Anmeldung und Abgleich als Kontext
   views/            Ein Bereich je Datei
@@ -360,7 +382,7 @@ supabase/
 ```
 
 Die Rechenlogik liegt vollständig in `lib/` und ist ohne Oberfläche testbar –
-alle 188 Tests laufen ohne Browser. Was in den Views steht, ist Darstellung.
+alle 205 Tests laufen ohne Browser. Was in den Views steht, ist Darstellung.
 
 ### Auf dem Telefon
 

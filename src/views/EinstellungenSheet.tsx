@@ -2,8 +2,10 @@ import { useState } from 'react'
 import { Field, TapRow } from '../components/Bits'
 import { IconUsers } from '../components/Icons'
 import { Sheet } from '../components/Sheet'
+import { pruefeVerbindung, type CheckResult } from '../lib/diagnose'
 import { normalizeInviteCode } from '../lib/id'
-import { cloudConfigured } from '../lib/supabase'
+import { live } from '../lib/store'
+import { cloudConfigured, supabase } from '../lib/supabase'
 import { useApp } from '../lib/useApp'
 import type { Settings } from '../lib/types'
 
@@ -32,6 +34,8 @@ export function EinstellungenSheet({ onClose }: { onClose: () => void }) {
   const [code, setCode] = useState('')
   const [name, setName] = useState(state.settings.displayName)
   const [busy, setBusy] = useState(false)
+  const [checks, setChecks] = useState<CheckResult[] | null>(null)
+  const [checking, setChecking] = useState(false)
 
   const set = (patch: Partial<Settings>) => dispatch({ type: 'settings/update', patch })
 
@@ -151,6 +155,12 @@ export function EinstellungenSheet({ onClose }: { onClose: () => void }) {
             Haushalt anlegen
           </button>
 
+          <p className="small muted">
+            Beim Beitreten werden deine Einkaufsliste und dein Vorrat mit der
+            geteilten <strong>zusammengelegt</strong>. Buchungen, Spartöpfe und
+            Challenges bleiben privat – die sieht niemand außer dir.
+          </p>
+
           <Field label="… oder mit Code beitreten">
             <input
               className="input"
@@ -185,6 +195,69 @@ export function EinstellungenSheet({ onClose }: { onClose: () => void }) {
           <span aria-hidden="true">!</span>
           <span>Gerade kein Kontakt zum Server. Änderungen gehen raus, sobald es wieder geht.</span>
         </div>
+      )}
+
+      {/* Der Abgleich läuft im Hintergrund; läuft er nicht, sieht man dem
+          Bildschirm das nicht an. Diese Prüfung beantwortet die Frage, die man
+          dann hat – und nennt zu jedem Punkt den nächsten Schritt. */}
+      <div className="btn-row">
+        <button
+          type="button"
+          className="btn btn-wide"
+          disabled={checking}
+          onClick={async () => {
+            setChecking(true)
+            setChecks(null)
+            try {
+              setChecks(
+                await pruefeVerbindung({
+                  client: supabase,
+                  configured: cloudConfigured,
+                  userId: session?.userId ?? null,
+                  householdId: state.household?.id ?? null,
+                }),
+              )
+            } finally {
+              setChecking(false)
+            }
+          }}
+        >
+          {checking ? 'Wird geprüft …' : 'Verbindung prüfen'}
+        </button>
+      </div>
+
+      {checks && (
+        <>
+          <div className="check-list" style={{ marginTop: 12 }}>
+            {checks.map((check) => (
+              <div key={check.label} className="check-item">
+                <span className={`check-mark check-mark-${check.state}`} aria-hidden="true">
+                  {check.state === 'ok' ? '✓' : check.state === 'uebersprungen' ? '–' : '!'}
+                </span>
+                <span className="check-body">
+                  <span className="check-label">{check.label}</span>
+                  <span className="check-detail">{check.detail}</span>
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {checks.some((c) => c.state === 'fehler') && (
+            <p className="small muted" style={{ marginTop: 10 }}>
+              Der häufigste Grund: Das Schema ist noch nicht eingespielt. Öffne dein Supabase-Projekt,
+              geh in den SQL-Editor und führe den Inhalt von <code>supabase/schema.sql</code> aus.
+              Das Skript lässt sich beliebig oft wiederholen.
+            </p>
+          )}
+
+          {state.household && checks.every((c) => c.state !== 'fehler') && (
+            <p className="small muted" style={{ marginTop: 10 }}>
+              Auf diesem Gerät: {live(state.shopItems).length} Einträge auf der Liste,{' '}
+              {live(state.pantryItems).length} im Vorrat. Weichen die Zahlen oben davon ab, läuft der
+              Abgleich noch – gib ihm einen Moment.
+            </p>
+          )}
+        </>
       )}
 
       <h2 className="section">Ich</h2>

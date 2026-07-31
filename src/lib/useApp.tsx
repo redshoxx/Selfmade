@@ -13,6 +13,7 @@ import { newInviteCode } from './id'
 import { pendingRuns } from './recurring'
 import { initialState, readStoredState, reducer, writeStoredState, type Action } from './store'
 import { cloudConfigured, redirectTo, supabase } from './supabase'
+import { erklaereFehler } from './diagnose'
 import {
   createHousehold as rpcCreate,
   joinHousehold as rpcJoin,
@@ -185,6 +186,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const stateRef = useRef(state)
   stateRef.current = state
 
+  /**
+   * Beim Wechsel des Haushalts von vorn hochladen.
+   *
+   * Ohne das bliebe die eigene Einkaufsliste für immer auf dem Gerät: Der
+   * Abgleich schiebt nur Datensätze hoch, die jünger sind als `pushedUpTo` –
+   * und alles, was vor dem Beitritt entstand, ist älter. Wer allein eine Liste
+   * geführt hat und sie dann teilen will, sähe seine Einträge nie beim
+   * anderen ankommen. Genau der Weg, den man geht.
+   */
+  const householdId = state.household?.id ?? null
+  const letzterHaushalt = useRef<string | null>(householdId)
+  if (letzterHaushalt.current !== householdId) {
+    letzterHaushalt.current = householdId
+    pushedUpTo.current = 0
+  }
+
   useEffect(() => {
     if (!supabase || !session) return
     let active = true
@@ -195,11 +212,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const household = await refreshHousehold(session.userId)
         if (!active) return
 
-        const incoming = await pullAll(supabase!, {
+        const { incoming, errors } = await pullAll(supabase!, {
           userId: session.userId,
           householdId: household?.id ?? null,
         })
         if (!active) return
+
+        // Fehlende Tabellen sind kein Grund, das Wenige wegzuwerfen, das
+        // ankam – aber sehr wohl einer, es zu sagen. Sonst behauptet die App
+        // „verbunden“, während nichts hoch- oder runtergeht.
+        if (errors.length > 0) {
+          dispatch({ type: 'sync/merge', incoming })
+          setCloudStatus('fehler')
+          setCloudError(erklaereFehler(errors[0]!.error))
+          return
+        }
+
         dispatch({ type: 'sync/merge', incoming })
 
         // Was lokal entstanden ist, solange niemand angemeldet war, muss jetzt
@@ -212,11 +240,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (!active) return
         pushedUpTo.current = Date.now()
         setCloudStatus('verbunden')
-      } catch {
+        setCloudError(null)
+      } catch (error) {
         if (!active) return
         // Der lokale Bestand bleibt vollständig nutzbar – nur eben allein.
         setCloudStatus('fehler')
-        setCloudError('Kein Kontakt zum Server. Die App läuft weiter, Änderungen gehen später raus.')
+        setCloudError(
+          erklaereFehler(
+            error && typeof error === 'object' ? (error as { code?: string; message?: string }) : null,
+          ),
+        )
       }
     })()
 

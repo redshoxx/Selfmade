@@ -431,10 +431,36 @@ function uebersetzeFehler(message: string): string {
  * Abgleich abzubrechen. Wenn der Vorrat nicht lädt, soll die Einkaufsliste
  * trotzdem ankommen.
  */
+export interface PullResult {
+  incoming: Partial<State>
+  /**
+   * Was schiefging, je Tabelle. Leer heißt: alles gelesen.
+   *
+   * Diese Liste ist der Grund, warum `pullAll` nicht einfach Daten
+   * zurückgibt: Eine fehlende Tabelle liefert `data: null` samt Fehler
+   * daneben. Wer nur `data ?? []` nimmt, bekommt eine leere Liste und hält
+   * den Abgleich für geglückt – die App meldet dann „verbunden“, obwohl
+   * nichts ankommt. Genau so verhält sie sich, wenn das Schema noch nicht
+   * eingespielt ist, und das ist der häufigste Fall überhaupt.
+   */
+  errors: { table: string; error: { code?: string; message?: string } }[]
+}
+
 export async function pullAll(
   client: SupabaseClient,
   args: { userId: string; householdId: string | null },
-): Promise<Partial<State>> {
+): Promise<PullResult> {
+  const errors: PullResult['errors'] = []
+
+  /** Ergebnis auswerten und einen etwaigen Fehler vermerken. */
+  const rows = (table: string, result: { data: unknown; error: unknown }): Row[] => {
+    if (result.error) {
+      errors.push({ table, error: result.error as { code?: string; message?: string } })
+      return []
+    }
+    return (result.data ?? []) as Row[]
+  }
+
   const privat = Promise.all([
     client.from('txs').select('*').eq('user_id', args.userId),
     client.from('pots').select('*').eq('user_id', args.userId),
@@ -456,28 +482,28 @@ export async function pullAll(
   const [[txs, pots, potEntries, challenges, recurring], shared] = await Promise.all([privat, geteilt])
 
   const incoming: Partial<State> = {
-    txs: ((txs.data ?? []) as Row[]).map(txFromRow),
-    pots: ((pots.data ?? []) as Row[]).map(potFromRow),
-    potEntries: ((potEntries.data ?? []) as Row[]).map(potEntryFromRow),
-    challenges: ((challenges.data ?? []) as Row[]).map(challengeFromRow),
-    recurringTxs: ((recurring.data ?? []) as Row[]).map(recurringFromRow),
+    txs: rows('txs', txs).map(txFromRow),
+    pots: rows('pots', pots).map(potFromRow),
+    potEntries: rows('pot_entries', potEntries).map(potEntryFromRow),
+    challenges: rows('challenges', challenges).map(challengeFromRow),
+    recurringTxs: rows('recurring_txs', recurring).map(recurringFromRow),
   }
 
   if (shared) {
     const [shopItems, pantryItems, aisleOrder, notes, templates] = shared
-    incoming.shopItems = ((shopItems.data ?? []) as Row[]).map(shopFromRow)
-    incoming.pantryItems = ((pantryItems.data ?? []) as Row[]).map(pantryFromRow)
-    incoming.notes = ((notes.data ?? []) as Row[]).map(noteFromRow)
-    incoming.shopTemplates = ((templates.data ?? []) as Row[]).map(templateFromRow)
+    incoming.shopItems = rows('shop_items', shopItems).map(shopFromRow)
+    incoming.pantryItems = rows('pantry_items', pantryItems).map(pantryFromRow)
+    incoming.notes = rows('notes', notes).map(noteFromRow)
+    incoming.shopTemplates = rows('shop_templates', templates).map(templateFromRow)
 
     const order: Partial<Record<AisleId, number>> = {}
-    for (const row of (aisleOrder.data ?? []) as Row[]) {
+    for (const row of rows('aisle_order', aisleOrder)) {
       order[asText(row.aisle) as AisleId] = asNum(row.rank)
     }
     incoming.aisleOrder = order
   }
 
-  return incoming
+  return { incoming, errors }
 }
 
 /* --- Hochladen ------------------------------------------------------------- */
@@ -538,25 +564,29 @@ export function subscribeShared(
   householdId: string,
   onChange: (incoming: Partial<State>) => void,
 ): () => void {
-  const channel = client
-    .channel(`haushalt:${householdId}`)
-    .on(
+  // Alle vier geteilten Tabellen, nicht nur die beiden auffälligsten: Eine
+  // Notiz der anderen Person soll ebenso sofort erscheinen wie ein Häkchen.
+  // Sonst sähe man sie erst nach einem Neuladen – und niemand lädt neu, um
+  // nachzusehen, ob jemand etwas geschrieben hat.
+  const tabellen = [
+    { table: 'shop_items', map: (row: Row): Partial<State> => ({ shopItems: [shopFromRow(row)] }) },
+    { table: 'pantry_items', map: (row: Row): Partial<State> => ({ pantryItems: [pantryFromRow(row)] }) },
+    { table: 'notes', map: (row: Row): Partial<State> => ({ notes: [noteFromRow(row)] }) },
+    { table: 'shop_templates', map: (row: Row): Partial<State> => ({ shopTemplates: [templateFromRow(row)] }) },
+  ]
+
+  let channel = client.channel(`haushalt:${householdId}`)
+  for (const { table, map } of tabellen) {
+    channel = channel.on(
       'postgres_changes',
-      { event: '*', schema: 'public', table: 'shop_items', filter: `household_id=eq.${householdId}` },
+      { event: '*', schema: 'public', table, filter: `household_id=eq.${householdId}` },
       (payload) => {
         const row = payload.new as Row | null
-        if (row && row.id) onChange({ shopItems: [shopFromRow(row)] })
+        if (row && row.id) onChange(map(row))
       },
     )
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'pantry_items', filter: `household_id=eq.${householdId}` },
-      (payload) => {
-        const row = payload.new as Row | null
-        if (row && row.id) onChange({ pantryItems: [pantryFromRow(row)] })
-      },
-    )
-    .subscribe()
+  }
+  channel.subscribe()
 
   return () => {
     void client.removeChannel(channel)
