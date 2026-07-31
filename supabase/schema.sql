@@ -70,8 +70,8 @@ create table if not exists public.erlaubte_personen (
 
 insert into public.erlaubte_personen (email, name)
 values
-  ('deine@adresse.de', 'Ich'),
-  ('ihre@adresse.de', 'Freundin')
+  ('djmctweets@gmail.com', 'Ich'),
+  ('wolfgangdilena1996@gmail.com', 'Freundin')
 on conflict (email) do nothing;
 
 -- ▲▲▲ ------------------------------------- ▲▲▲
