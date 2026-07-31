@@ -12,6 +12,17 @@
 --  Wer sich anmeldet und in `erlaubte_personen` steht, sieht dieselbe
 --  Einkaufsliste und denselben Vorrat – sofort.
 --
+--  Dieses Skript ist nur die eine Hälfte. Die andere sind zwei Handgriffe im
+--  Dashboard, ohne die niemand hereinkommt:
+--
+--    1. Authentication → Users → Add user → Create new user, mit Häkchen bei
+--       „Auto Confirm User“ – je einmal für euch beide, mit **genau den**
+--       Adressen, die unten in `erlaubte_personen` stehen.
+--    2. Authentication → Providers → Email → „Allow new users to sign up“ aus.
+--
+--  Angemeldet wird mit E-Mail und Passwort. Es wird keine Mail verschickt und
+--  auf keine gewartet.
+--
 --  Zeitstempel liegen als bigint in Millisekunden vor – dieselbe Einheit wie
 --  im Browser. Beim Abgleich gewinnt der jüngere Stand, und dieser Vergleich
 --  soll nicht an einer Umrechnung zwischen zwei Zeitformaten scheitern.
@@ -20,15 +31,20 @@
 -- ---------------------------------------------------------------------------
 --  Wer mitlesen darf
 --
---  Diese Tabelle ist die gesamte Zugangskontrolle. Sie ist nötig, weil der
+--  Diese Tabelle ist die eigentliche Zugangskontrolle. Sie ist nötig, weil der
 --  Schlüssel der App öffentlich ist – er steckt in jedem fertigen Bündel im
---  Klartext, das ist bei einem publishable key so vorgesehen. Ohne diese
---  Liste könnte sich jeder, der die Adresse der App kennt, ein Konto anlegen
---  und stünde damit in derselben Einkaufsliste.
+--  Klartext, das ist bei einem publishable key so vorgesehen. Ohne diese Liste
+--  stünde jeder, der ein Konto hat, in derselben Einkaufsliste.
 --
 --  Der Vergleich läuft über die E-Mail-Adresse und nicht über die
 --  Benutzerkennung: Die Adresse kennt man, die Kennung entsteht erst beim
---  ersten Anmelden. Sonst könnte man niemanden im Voraus freischalten.
+--  Anlegen des Kontos. Sonst könnte man niemanden im Voraus freischalten.
+--
+--  Groß- und Kleinschreibung ist gleichgültig, beide Seiten werden
+--  kleingeschrieben verglichen. Ein *anderer* Adressteil ist es nicht: Steht
+--  hier eine Adresse, zu der es kein Konto gibt, kommt diese Person nirgends
+--  hinein – und umgekehrt sieht ein Konto, das hier fehlt, zwar seine eigenen
+--  Buchungen, aber nichts Gemeinsames. Die beiden Listen müssen sich decken.
 -- ---------------------------------------------------------------------------
 
 create table if not exists public.erlaubte_personen (
@@ -39,8 +55,9 @@ create table if not exists public.erlaubte_personen (
 
 -- ▼▼▼ HIER EURE BEIDEN ADRESSEN EINTRAGEN ▼▼▼
 --
---  Ohne diesen Schritt kommt niemand an die gemeinsamen Daten – die eigenen
---  Buchungen kann trotzdem jeder führen.
+--  Dieselben Adressen, mit denen ihr die Konten unter Authentication → Users
+--  anlegt. Ohne diesen Schritt kommt niemand an die gemeinsamen Daten – die
+--  eigenen Buchungen kann trotzdem jeder führen.
 --
 --  Die Adressen stehen bewusst nicht schon hier: Diese Datei liegt im
 --  Repository, und eine private E-Mail-Adresse gehört nicht dorthin, nur weil
@@ -265,12 +282,18 @@ create table if not exists public.user_prefs (
 --  allen Freigeschalteten. Der Block ist harmlos, wenn es nichts davon gibt.
 -- ---------------------------------------------------------------------------
 
+--  `cascade` ist hier nicht Bequemlichkeit, sondern nötig: An der Spalte hängen
+--  die alten Zugriffsregeln (`using (is_household_member(household_id))`).
+--  Ohne `cascade` bricht das Skript mit „cannot drop column … because other
+--  objects depend on it“ ab – und zwar mittendrin, sodass die Datenbank halb
+--  umgestellt zurückbleibt. Was mitfällt, sind ausschließlich jene Regeln und
+--  Indizes; beide legt dieses Skript weiter unten neu an.
 do $$
 declare
   t text;
 begin
   foreach t in array array['shop_items', 'pantry_items', 'notes', 'shop_templates'] loop
-    execute format('alter table public.%I drop column if exists household_id', t);
+    execute format('alter table public.%I drop column if exists household_id cascade', t);
   end loop;
 end;
 $$;
@@ -294,11 +317,18 @@ begin
 end;
 $$;
 
+-- Erst die Funktionen, dann die Tabellen: `create_household` und
+-- `join_household` geben `public.households` zurück und hängen damit am
+-- Tabellentyp. Andersherum bricht das Skript mit „cannot drop table households
+-- because other objects depend on it“ ab.
+drop function if exists public.create_household(text, text, text);
+drop function if exists public.join_household(text, text);
+
 drop table if exists public.household_members;
 drop table if exists public.households;
 
-drop function if exists public.create_household(text, text, text);
-drop function if exists public.join_household(text, text);
+-- Zum Schluss, weil die alten Zugriffsregeln sie benutzten – die sind mit den
+-- Spalten und Tabellen oben schon weg.
 drop function if exists public.is_household_member(uuid);
 
 -- Nachträglich ergänzte Spalten, damit ein bereits eingespieltes Schema
@@ -376,6 +406,17 @@ create policy erlaubte_insert on public.erlaubte_personen
   for insert to authenticated
   with check (public.ist_erlaubt());
 
+-- Ändern gehört dazu, auch wenn die App keine Schaltfläche dafür hat: Sie
+-- schreibt mit `upsert`, und das ist ein „insert … on conflict do update“.
+-- Steht die Adresse schon auf der Liste – etwa weil man den Namen berichtigen
+-- will –, greift der zweite Teil. Ohne diese Richtlinie schlüge genau das mit
+-- einer Rechtemeldung fehl, und zwar nur beim zweiten Mal.
+drop policy if exists erlaubte_update on public.erlaubte_personen;
+create policy erlaubte_update on public.erlaubte_personen
+  for update to authenticated
+  using (public.ist_erlaubt())
+  with check (public.ist_erlaubt());
+
 drop policy if exists erlaubte_delete on public.erlaubte_personen;
 create policy erlaubte_delete on public.erlaubte_personen
   for delete to authenticated
@@ -405,3 +446,27 @@ begin
   end loop;
 end;
 $$;
+
+-- ---------------------------------------------------------------------------
+--  Abschluss: was jetzt dasteht
+--
+--  Der SQL-Editor zeigt das Ergebnis der letzten Abfrage. Diese hier ist
+--  deshalb eine Quittung: Wer die Adressen im Block oben zu ändern vergessen
+--  hat, sieht hier „deine@adresse.de“ stehen und weiß es sofort – statt sich
+--  später zu fragen, warum die App nichts hergibt.
+--
+--  Zur Erinnerung: Zu jeder dieser Adressen muss unter Authentication → Users
+--  ein Konto mit „Auto Confirm User“ existieren. Diese Liste allein genügt
+--  nicht, das Konto allein auch nicht.
+-- ---------------------------------------------------------------------------
+
+select
+  email as "darf mitlesen",
+  name as "angezeigt als",
+  case
+    when email in ('deine@adresse.de', 'ihre@adresse.de')
+      then '⚠ Platzhalter – oben im Skript ersetzen und noch einmal ausführen'
+    else '✓ eingetragen'
+  end as "Stand"
+from public.erlaubte_personen
+order by email;

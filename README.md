@@ -476,6 +476,7 @@ src/
   components/       Wiederverwendbare Bausteine
 supabase/
   schema.sql        Tabellen, Zugriffsregeln, Zugangsliste
+  pruefung/         Schema gegen ein echtes Postgres fahren (siehe dortige README)
 ```
 
 Die Rechenlogik liegt vollständig in `lib/` und ist ohne Oberfläche testbar –
