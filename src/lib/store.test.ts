@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { initialState, live, loadState, mergeState, reducer, slotAmount } from './store'
+import { hasChangesSince, initialState, live, loadState, mergeState, reducer, slotAmount, SYNC_LISTS } from './store'
 import type { Challenge, PantryItem, Pot, ShopItem, State, Tx } from './types'
 
 function withTx(state: State, over: Partial<Tx> = {}): State {
@@ -473,5 +473,82 @@ describe('loadState', () => {
     expect(state.pantryItems[0]!.name).toBe('Milch')
     expect(state.pots[0]!.targetCents).toBe(50000)
     expect(state.household!.members).toHaveLength(1)
+  })
+})
+
+describe('hasChangesSince', () => {
+  /**
+   * Die Liste der abzugleichenden Listen stand einmal doppelt: einmal zum
+   * Hochladen, einmal zum Erkennen, dass es etwas hochzuladen gibt. In der
+   * zweiten fehlten drei – geteilte Notizen gingen deshalb nie von selbst
+   * hoch, sondern nur, wenn zufällig gleichzeitig ein Einkaufseintrag
+   * geändert wurde. Dieser Test hält beide Enden zusammen.
+   */
+  const NICHT_EINZELN = ['categories']
+
+  it('lässt keine Liste des Zustands aus', () => {
+    const listen = Object.entries(initialState())
+      .filter(([, wert]) => Array.isArray(wert))
+      .map(([schluessel]) => schluessel)
+
+    for (const schluessel of listen) {
+      expect([...SYNC_LISTS, ...NICHT_EINZELN]).toContain(schluessel)
+    }
+  })
+
+  it('erkennt eine neue Notiz', () => {
+    const state = reducer(initialState(), { type: 'note/add', note: { title: 'Rezept', body: '', pinned: false } })
+    expect(hasChangesSince(state, 0)).toBe(true)
+    expect(hasChangesSince(state, Date.now() + 1000)).toBe(false)
+  })
+
+  it('erkennt eine umbenannte Kategorie', () => {
+    // Kategorien haben keinen eigenen Zeitstempel; ohne den Stand des Ganzen
+    // bliebe eine Umbenennung für den Abgleich unsichtbar.
+    const vorher = initialState()
+    const state = reducer(vorher, {
+      type: 'category/update',
+      id: vorher.categories[0]!.id,
+      patch: { name: 'Wocheneinkauf' },
+    })
+    expect(hasChangesSince(state, 0)).toBe(true)
+  })
+
+  it('meldet nichts, solange nichts passiert ist', () => {
+    expect(hasChangesSince(initialState(), 0)).toBe(false)
+  })
+})
+
+describe('mergeState mit Kategorien', () => {
+  const mitKategorie = (name: string, prefsUpdatedAt: number): Partial<State> => ({
+    categories: [{ id: 'c1', name, emoji: '•', kind: 'ausgabe', budgetCents: null }],
+    prefsUpdatedAt,
+  })
+
+  it('übernimmt den jüngeren Stand vom Server', () => {
+    const meiner: State = { ...initialState(), prefsUpdatedAt: 100 }
+    const merged = mergeState(meiner, mitKategorie('Vom Server', 200))
+    expect(merged.categories.map((c) => c.name)).toEqual(['Vom Server'])
+    expect(merged.prefsUpdatedAt).toBe(200)
+  })
+
+  it('behält den eigenen, wenn er jünger ist', () => {
+    // Sonst schlüge ein zweiter Abgleich die gerade umbenannte Kategorie mit
+    // dem alten Namen vom Server zurück.
+    const meiner: State = {
+      ...initialState(),
+      categories: [{ id: 'c1', name: 'Gerade umbenannt', emoji: '•', kind: 'ausgabe', budgetCents: null }],
+      prefsUpdatedAt: 300,
+    }
+    const merged = mergeState(meiner, mitKategorie('Alt', 200))
+    expect(merged.categories.map((c) => c.name)).toEqual(['Gerade umbenannt'])
+    expect(merged.prefsUpdatedAt).toBe(300)
+  })
+
+  it('ersetzt vorhandene Kategorien nie durch eine leere Liste', () => {
+    // Ohne Kategorien ließe sich nichts mehr erfassen.
+    const meiner = initialState()
+    const merged = mergeState(meiner, { categories: [], prefsUpdatedAt: Date.now() })
+    expect(merged.categories.length).toBe(meiner.categories.length)
   })
 })

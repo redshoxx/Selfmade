@@ -252,4 +252,14 @@ export interface State {
   /* Rahmen */
   settings: Settings
   household: Household | null
+  /**
+   * Wann Kategorien und Einstellungen zuletzt angefasst wurden.
+   *
+   * Beides sind keine Listen mit eigenen Zeitstempeln, sondern jeweils ein
+   * Ganzes: Wer eine Kategorie umbenennt, ändert die Sammlung. Für den
+   * Abgleich braucht dieses Ganze einen eigenen Stand, sonst gäbe es nichts
+   * zu vergleichen und der Server überschriebe stets das Gerät – oder
+   * umgekehrt.
+   */
+  prefsUpdatedAt: number
 }

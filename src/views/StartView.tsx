@@ -24,10 +24,10 @@ import type { Tab } from '../lib/types'
  */
 export function StartView({
   onGo,
-  onSettings,
+  onShare,
 }: {
   onGo: (tab: Tab, intent?: GoIntent) => void
-  onSettings: () => void
+  onShare: () => void
 }) {
   const { state } = useApp()
   const month = currentMonth()
@@ -89,7 +89,7 @@ export function StartView({
             emoji="👥"
             title="Zu zweit nutzen"
             text="Einkaufsliste und Vorrat teilen. Dein Geld bleibt privat."
-            onClick={onSettings}
+            onClick={onShare}
           />
         </div>
 
@@ -249,7 +249,7 @@ export function StartView({
             emoji="👥"
             title="Zu zweit nutzen"
             text="Einkaufsliste und Vorrat teilen. Dein Geld bleibt privat."
-            onClick={onSettings}
+            onClick={onShare}
           />
         </div>
       )}

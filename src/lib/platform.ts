@@ -33,12 +33,18 @@ export function readLaunchIntent(search: string = window.location.search): Launc
   }
 }
 
-/** Adresse säubern, damit ein Neuladen nicht wieder dasselbe Blatt aufmacht. */
+/**
+ * Adresse säubern, damit ein Neuladen nicht wieder dasselbe Blatt aufmacht.
+ *
+ * Der Anhang hinter `#` bleibt stehen. Dort bringt der Anmeldelink von
+ * Supabase die Sitzung mit, und die wird erst kurz nach dem Start ausgelesen –
+ * wer ihn hier wegwirft, meldet niemanden mehr an.
+ */
 export function clearLaunchIntent(): void {
   try {
-    if (window.location.search) {
-      window.history.replaceState(null, '', window.location.pathname)
-    }
+    if (!window.location.search) return
+    const rest = `${window.location.pathname}${window.location.hash}`
+    window.history.replaceState(null, '', rest)
   } catch {
     // Ohne History-API halt nicht.
   }

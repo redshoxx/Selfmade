@@ -3,6 +3,7 @@
   "short_name": "Selfmade",
   "description": "Finanzen, Spar-Challenges, geteilte Einkaufsliste und Vorrat mit Ablaufdatum.",
   "lang": "de",
+  "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

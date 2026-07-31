@@ -25,7 +25,13 @@ function fakeClient(antwort: (tabelle: string) => { data: unknown; error: unknow
     }
     return kette
   }
-  return { from: (tabelle: string) => bauer(tabelle) } as never
+  return {
+    from: (tabelle: string) => bauer(tabelle),
+    // Die Prüfung ruft auch die Beitrittsfunktion auf. Ohne sie hier flöge
+    // eine Ausnahme, `sicher()` finge sie ab – und der Punkt stünde still auf
+    // „in Ordnung“, obwohl gar nichts geprüft wurde.
+    rpc: (name: string) => Promise.resolve(antwort(`rpc:${name}`)),
+  } as never
 }
 
 describe('Fehler deuten', () => {
@@ -112,6 +118,34 @@ describe('pruefeVerbindung', () => {
     const tabellen = zustand(checks, 'Tabellen')
     expect(tabellen?.state).toBe('warnung')
     expect(tabellen?.detail).toContain('notes')
+  })
+
+  it('erkennt eine fehlende Beitrittsfunktion trotz vollständiger Tabellen', async () => {
+    // Wer beim Einspielen nur den oberen Teil des Skripts markiert hat, bekommt
+    // alle Tabellen und keine Funktionen. Ein Code führt dann zu „Das hat nicht
+    // geklappt“, und man sucht an der falschen Stelle.
+    const client = fakeClient((t) =>
+      t === 'rpc:join_household'
+        ? { data: null, error: { code: 'PGRST202', message: 'Could not find the function public.join_household' } }
+        : { data: [], error: null },
+    )
+    const checks = await pruefeVerbindung({ client, configured: true, userId: 'u1', householdId: null })
+
+    expect(zustand(checks, 'Tabellen')?.state).toBe('ok')
+    const beitritt = zustand(checks, 'Beitreten')
+    expect(beitritt?.state).toBe('fehler')
+    expect(beitritt?.detail).toContain('join_household')
+  })
+
+  it('nimmt „Einladungscode nicht gefunden“ als Beweis, dass die Funktion da ist', async () => {
+    const client = fakeClient((t) =>
+      t === 'rpc:join_household'
+        ? { data: null, error: { code: 'P0001', message: 'Einladungscode nicht gefunden' } }
+        : { data: [], error: null },
+    )
+    const checks = await pruefeVerbindung({ client, configured: true, userId: 'u1', householdId: null })
+
+    expect(zustand(checks, 'Beitreten')?.state).toBe('ok')
   })
 
   it('meldet fehlenden Haushalt als Warnung, nicht als Fehler', async () => {

@@ -16,7 +16,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 const GETEILTE_TABELLEN = ['households', 'household_members', 'shop_items', 'pantry_items'] as const
 const PRIVATE_TABELLEN = ['txs', 'pots', 'challenges'] as const
 /** Später ergänzt – ihr Fehlen ist kein Grund zur Panik, nur ein Hinweis. */
-const SPAETERE_TABELLEN = ['notes', 'shop_templates', 'recurring_txs'] as const
+const SPAETERE_TABELLEN = ['notes', 'shop_templates', 'recurring_txs', 'user_prefs'] as const
 
 export type CheckState = 'ok' | 'warnung' | 'fehler' | 'uebersprungen'
 
@@ -179,8 +179,12 @@ export async function pruefeVerbindung(input: DiagnoseInput): Promise<CheckResul
   const gesperrt: string[] = []
   const spaeterFehlend: string[] = []
 
+  // `select('*')` und nicht `select('id')`: Nicht jede Tabelle hat eine Spalte
+  // dieses Namens. `user_prefs` etwa hängt am Konto. Eine Abfrage nach einer
+  // fehlenden Spalte meldet einen anderen Fehler als eine fehlende Tabelle –
+  // die Prüfung liefe dann ins Leere und meldete nichts.
   const abklopfen = async (tabelle: string, sammelStelle: string[]) => {
-    const { error } = await sicher(() => client.from(tabelle).select('id').limit(1))
+    const { error } = await sicher(() => client.from(tabelle).select('*').limit(1))
     if (!error) return
     if (istTabelleFehlt(error)) sammelStelle.push(tabelle)
     else if (istZugriffVerweigert(error)) gesperrt.push(tabelle)
@@ -207,6 +211,43 @@ export async function pruefeVerbindung(input: DiagnoseInput): Promise<CheckResul
   } else {
     out.push({ label: 'Tabellen', state: 'ok', detail: 'Alle Tabellen sind angelegt.' })
   }
+
+  /*
+   * Die Beitrittsfunktion.
+   *
+   * Tabellen allein genügen nicht: Der Beitritt läuft über eine Funktion in
+   * der Datenbank, und die kann fehlen, während alle Tabellen stehen – etwa
+   * wenn beim Einspielen nur der obere Teil des Skripts markiert war. Wer
+   * dann einen Code eingibt, bekommt „Das hat nicht geklappt“ und sucht an
+   * der falschen Stelle.
+   *
+   * Geprüft wird mit einem Code, den es nicht geben kann. Antwortet die
+   * Datenbank mit „Einladungscode nicht gefunden“, ist die Funktion da.
+   */
+  const beitritt = await sicher(() =>
+    client.rpc('join_household', { code: 'PRUEFUNG-KEIN-TREFFER', member_name: 'Prüfung' }),
+  )
+  const beitrittsText = (beitritt.error?.message ?? '').toLowerCase()
+  const fehltFunktion =
+    beitritt.error !== null &&
+    // PGRST202 meldet die fehlende Funktion. PGRST205 kommt dazu, weil bei
+    // gänzlich fehlendem Schema der Fehler aus dem Zwischenspeicher von
+    // PostgREST stammt und dann von der Tabelle spricht – in einem Aufruf, in
+    // dem es gar keine Tabelle gibt. Beides heißt hier dasselbe.
+    (beitritt.error.code === 'PGRST202' ||
+      beitritt.error.code === 'PGRST205' ||
+      beitrittsText.includes('could not find') ||
+      beitrittsText.includes('does not exist'))
+
+  out.push(
+    fehltFunktion
+      ? {
+          label: 'Beitreten',
+          state: 'fehler',
+          detail: 'Die Funktion join_household fehlt. Spiel supabase/schema.sql vollständig ein.',
+        }
+      : { label: 'Beitreten', state: 'ok', detail: 'Einladungscodes lassen sich einlösen.' },
+  )
 
   if (gesperrt.length > 0) {
     out.push({

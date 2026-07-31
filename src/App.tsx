@@ -11,6 +11,7 @@ import { EinstellungenSheet } from './views/EinstellungenSheet'
 import { GeldView } from './views/GeldView'
 import { SparenView } from './views/SparenView'
 import { StartView } from './views/StartView'
+import { TeilenSheet } from './views/TeilenSheet'
 import { VorratView } from './views/VorratView'
 
 /**
@@ -28,7 +29,7 @@ export interface GoIntent {
 }
 
 export function App() {
-  const { state } = useApp()
+  const { state, pendingInvite, joinedHousehold } = useApp()
 
   // Startabsicht aus der Adresse genau einmal auswerten. Sie kommt von den
   // Verknüpfungen, die Android beim langen Tippen aufs App-Symbol anbietet.
@@ -41,8 +42,19 @@ export function App() {
   const [tab, setTab] = useState<Tab>(intent.tab ?? state.settings.startTab)
   const [go, setGo] = useState<GoIntent>(() => (intent.compose ? { compose: intent.compose } : {}))
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
 
   useEffect(() => trackKeyboardInset(), [])
+
+  /*
+   * Wer einen Einladungslink antippt, hat schon gesagt, was er will. Die App
+   * öffnet deshalb von selbst die Stelle, an der es weitergeht – sonst landet
+   * er auf der Startseite und muss den Weg dorthin erst suchen. Dasselbe nach
+   * einem geglückten Beitritt: Die Rückmeldung steht dort.
+   */
+  useEffect(() => {
+    if (pendingInvite || joinedHousehold) setShareOpen(true)
+  }, [pendingInvite, joinedHousehold])
 
   const goTo = useCallback((next: Tab, withIntent: GoIntent = {}) => {
     setGo(withIntent)
@@ -63,7 +75,7 @@ export function App() {
           landet man in der neuen Ansicht mittendrin. Er sorgt zugleich dafür,
           dass die Absicht oben beim Aufbau gelesen wird. */}
       <main style={{ display: 'contents' }} key={tab}>
-        {tab === 'start' && <StartView onGo={goTo} onSettings={() => setSettingsOpen(true)} />}
+        {tab === 'start' && <StartView onGo={goTo} onShare={() => setShareOpen(true)} />}
         {tab === 'geld' && <GeldView startCompose={go.compose ?? null} />}
         {tab === 'sparen' && <SparenView startPicking={go.challenge} />}
         {tab === 'einkauf' && <EinkaufView />}
@@ -91,7 +103,17 @@ export function App() {
 
       <TabBar active={tab} counts={counts} onChange={(next) => goTo(next)} />
 
-      {settingsOpen && <EinstellungenSheet onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen && (
+        <EinstellungenSheet
+          onClose={() => setSettingsOpen(false)}
+          onShare={() => {
+            setSettingsOpen(false)
+            setShareOpen(true)
+          }}
+        />
+      )}
+
+      {shareOpen && <TeilenSheet onClose={() => setShareOpen(false)} />}
     </div>
   )
 }

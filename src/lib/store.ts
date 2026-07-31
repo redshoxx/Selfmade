@@ -70,7 +70,35 @@ export function initialState(): State {
     aisleOrder: {},
     settings: { ...DEFAULT_SETTINGS },
     household: null,
+    prefsUpdatedAt: 0,
   }
+}
+
+/**
+ * Die Listen, die zum Server gehen.
+ *
+ * An einer Stelle, weil sie an zwei gebraucht wird: zum Hochladen und um
+ * überhaupt zu erkennen, dass es etwas hochzuladen gibt. Stand die zweite
+ * Aufzählung getrennt daneben, fehlten dort drei Listen – geteilte Notizen
+ * wanderten nie von selbst hoch, sondern nur, wenn zufällig gleichzeitig ein
+ * Einkaufseintrag geändert wurde. Ein Test hält beide Enden zusammen.
+ */
+export const SYNC_LISTS = [
+  'txs',
+  'pots',
+  'potEntries',
+  'challenges',
+  'recurringTxs',
+  'shopItems',
+  'pantryItems',
+  'notes',
+  'shopTemplates',
+] as const satisfies readonly (keyof State)[]
+
+/** Gibt es seit `since` überhaupt etwas Neues? Sonst gar nicht erst fragen. */
+export function hasChangesSince(state: State, since: number): boolean {
+  if (state.prefsUpdatedAt > since) return true
+  return SYNC_LISTS.some((key) => (state[key] as readonly Entity[]).some((item) => item.updatedAt > since))
 }
 
 /* --- Änderungen ----------------------------------------------------------- */
@@ -226,11 +254,16 @@ export function reducer(state: State, action: Action): State {
     }
 
     case 'category/add':
-      return { ...state, categories: [...state.categories, { ...action.category, id: newId() }] }
+      return {
+        ...state,
+        categories: [...state.categories, { ...action.category, id: newId() }],
+        prefsUpdatedAt: Date.now(),
+      }
     case 'category/update':
       return {
         ...state,
         categories: state.categories.map((c) => (c.id === action.id ? { ...c, ...action.patch, id: c.id } : c)),
+        prefsUpdatedAt: Date.now(),
       }
     case 'category/remove': {
       const doomed = state.categories.find((c) => c.id === action.id)
@@ -243,7 +276,11 @@ export function reducer(state: State, action: Action): State {
       // Buchungen behalten ihre Kategorie-Kennung; die Oberfläche zeigt dann
       // „Ohne Kategorie“. Buchungen mitzulöschen wäre ein Datenverlust, den
       // niemand erwartet, wenn er nur eine Kategorie aufräumen wollte.
-      return { ...state, categories: state.categories.filter((c) => c.id !== action.id) }
+      return {
+        ...state,
+        categories: state.categories.filter((c) => c.id !== action.id),
+        prefsUpdatedAt: Date.now(),
+      }
     }
 
     /* --- Sparen --- */
@@ -469,7 +506,7 @@ export function reducer(state: State, action: Action): State {
 
     /* --- Rahmen --- */
     case 'settings/update':
-      return { ...state, settings: { ...state.settings, ...action.patch } }
+      return { ...state, settings: { ...state.settings, ...action.patch }, prefsUpdatedAt: Date.now() }
     case 'household/set':
       return { ...state, household: action.household }
     case 'sync/merge':
@@ -518,8 +555,17 @@ function mergeList<T extends Entity>(mine: readonly T[], theirs: readonly T[] | 
 }
 
 export function mergeState(state: State, incoming: Partial<State>): State {
+  // Kategorien und Einstellungen sind je ein Ganzes, kein Bestand einzelner
+  // Datensätze. Für sie gilt derselbe Grundsatz wie sonst – der jüngere Stand
+  // gewinnt –, nur eben für die Sammlung als solche. Ohne den Vergleich
+  // schlüge ein zweiter Abgleich die gerade umbenannte Kategorie wieder mit
+  // dem alten Namen vom Server zurück.
+  const prefsFremd = incoming.prefsUpdatedAt ?? 0
+  const prefsNeuer = prefsFremd > state.prefsUpdatedAt
+
   return {
     ...state,
+    prefsUpdatedAt: Math.max(state.prefsUpdatedAt, prefsFremd),
     txs: mergeList(state.txs, incoming.txs),
     pots: mergeList(state.pots, incoming.pots),
     potEntries: mergeList(state.potEntries, incoming.potEntries),
@@ -529,7 +575,8 @@ export function mergeState(state: State, incoming: Partial<State>): State {
     pantryItems: mergeList(state.pantryItems, incoming.pantryItems),
     notes: mergeList(state.notes, incoming.notes),
     shopTemplates: mergeList(state.shopTemplates, incoming.shopTemplates),
-    categories: incoming.categories ?? state.categories,
+    categories: prefsNeuer && incoming.categories?.length ? incoming.categories : state.categories,
+    settings: prefsNeuer && incoming.settings ? { ...state.settings, ...incoming.settings } : state.settings,
     aisleOrder: { ...state.aisleOrder, ...incoming.aisleOrder },
     household: incoming.household ?? state.household,
   }
@@ -709,6 +756,10 @@ export function loadState(raw: string | null): State {
           : 'start',
       haptics: typeof s.haptics === 'boolean' ? s.haptics : true,
     }
+  }
+
+  if (typeof data.prefsUpdatedAt === 'number' && Number.isFinite(data.prefsUpdatedAt)) {
+    state.prefsUpdatedAt = data.prefsUpdatedAt
   }
 
   if (data.household && typeof data.household === 'object') {

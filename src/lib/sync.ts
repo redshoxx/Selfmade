@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type {
   AisleId,
+  Category,
   Challenge,
   Household,
   Note,
@@ -8,6 +9,7 @@ import type {
   Pot,
   PotEntry,
   RecurringTx,
+  Settings,
   ShopItem,
   ShopTemplate,
   State,
@@ -164,6 +166,74 @@ function templateToRow(template: ShopTemplate, householdId: string): Row {
     items: template.items,
     updated_at: template.updatedAt,
     deleted_at: template.deletedAt,
+  }
+}
+
+/* --- Kategorien und Einstellungen ----------------------------------------- */
+
+/**
+ * Kategorien und Einstellungen liegen zusammen in einer Zeile je Person.
+ *
+ * Nicht aus Bequemlichkeit: Eine Kategorie hat keinen eigenen Zeitstempel und
+ * keinen Grabstein, sie ist Teil einer Sammlung, die man als Ganzes ändert.
+ * Ohne diesen Abgleich stünde nach der Anmeldung auf einem zweiten Gerät bei
+ * jeder Buchung „Ohne Kategorie“ – die Buchungen kämen an, die Kategorien, auf
+ * die sie zeigen, nicht.
+ *
+ * Vom Erscheinungsbild wandert bewusst nichts mit: Ob dunkel oder hell, ob das
+ * Gerät rüttelt, hängt am Gerät und nicht an der Person.
+ */
+interface PrefsRow {
+  categories: Category[]
+  settings: Partial<Settings>
+  prefsUpdatedAt: number
+}
+
+function prefsFromRow(row: Row): PrefsRow {
+  const rohe = Array.isArray(row.categories) ? (row.categories as unknown[]) : []
+  const categories = rohe
+    .filter((entry): entry is Row => !!entry && typeof entry === 'object')
+    .filter((entry) => typeof entry.id === 'string' && typeof entry.name === 'string')
+    .map((entry) => ({
+      id: asText(entry.id),
+      name: asText(entry.name),
+      emoji: asText(entry.emoji, '•'),
+      kind: entry.kind === 'einnahme' ? ('einnahme' as const) : ('ausgabe' as const),
+      budgetCents: asNullNum(entry.budget_cents ?? entry.budgetCents),
+    }))
+
+  const roheEinstellungen = row.settings && typeof row.settings === 'object' ? (row.settings as Row) : {}
+  const settings: Partial<Settings> = {}
+  if (typeof roheEinstellungen.display_name === 'string') settings.displayName = roheEinstellungen.display_name
+  const startTab = roheEinstellungen.start_tab
+  if (
+    startTab === 'start' ||
+    startTab === 'geld' ||
+    startTab === 'sparen' ||
+    startTab === 'einkauf' ||
+    startTab === 'vorrat'
+  ) {
+    settings.startTab = startTab
+  }
+
+  return { categories, settings, prefsUpdatedAt: asNum(row.updated_at) }
+}
+
+function prefsToRow(state: State, userId: string): Row {
+  return {
+    user_id: userId,
+    categories: state.categories.map((category) => ({
+      id: category.id,
+      name: category.name,
+      emoji: category.emoji,
+      kind: category.kind,
+      budget_cents: category.budgetCents,
+    })),
+    settings: {
+      display_name: state.settings.displayName,
+      start_tab: state.settings.startTab,
+    },
+    updated_at: state.prefsUpdatedAt,
   }
 }
 
@@ -343,31 +413,59 @@ export const rowCodecs = {
   templateToRow,
   recurringFromRow,
   recurringToRow,
+  prefsFromRow,
+  prefsToRow,
 }
 
 /* --- Haushalt -------------------------------------------------------------- */
 
-export async function loadHousehold(client: SupabaseClient, userId: string): Promise<Household | null> {
+/**
+ * Was beim Nachsehen herauskam.
+ *
+ * Die Unterscheidung ist nicht Formsache. Vorher lieferte diese Funktion bei
+ * jedem Fehler `null`, und der Aufrufer las das als „gehört zu keinem
+ * Haushalt“ – ein kurzer Netzaussetzer beim Start ließ die App den Haushalt
+ * also vergessen. Danach stand da wieder „Haushalt anlegen“, und nichts wurde
+ * mehr geteilt, bis jemand die App neu startete. „Konnte nicht nachsehen“ und
+ * „gibt es nicht“ sind zwei verschiedene Antworten und müssen es bleiben.
+ */
+export type HouseholdLookup =
+  | { status: 'ok'; household: Household }
+  | { status: 'keiner' }
+  | { status: 'fehler'; error: { code?: string; message?: string } }
+
+export async function loadHousehold(client: SupabaseClient, userId: string): Promise<HouseholdLookup> {
+  // `limit(1)` statt `maybeSingle()`: Letzteres bricht mit einem Fehler ab,
+  // sobald jemand in zwei Haushalten steht. Das soll nach `join_household`
+  // nicht mehr vorkommen – aber ein Altbestand darf die App nicht lahmlegen.
   const { data: membership, error } = await client
     .from('household_members')
     .select('household_id')
     .eq('user_id', userId)
-    .maybeSingle()
-  if (error || !membership) return null
+    .limit(1)
+  if (error) return { status: 'fehler', error: error as { code?: string; message?: string } }
 
-  const householdId = (membership as Row).household_id as string
-  const [{ data: household }, { data: members }] = await Promise.all([
+  const first = ((membership ?? []) as Row[])[0]
+  if (!first) return { status: 'keiner' }
+
+  const householdId = asText(first.household_id)
+  const [{ data: household, error: haushaltFehler }, { data: members }] = await Promise.all([
     client.from('households').select('id, name, invite_code').eq('id', householdId).maybeSingle(),
     client.from('household_members').select('user_id, name').eq('household_id', householdId),
   ])
-  if (!household) return null
+  if (haushaltFehler) return { status: 'fehler', error: haushaltFehler as { code?: string; message?: string } }
+  // Mitgliedschaft ohne Haushalt: der Haushalt wurde aufgelöst.
+  if (!household) return { status: 'keiner' }
 
   const row = household as Row
   return {
-    id: asText(row.id),
-    name: asText(row.name, 'Haushalt'),
-    inviteCode: asText(row.invite_code),
-    members: ((members ?? []) as Row[]).map((m) => ({ userId: asText(m.user_id), name: asText(m.name, 'Ich') })),
+    status: 'ok',
+    household: {
+      id: asText(row.id),
+      name: asText(row.name, 'Haushalt'),
+      inviteCode: asText(row.invite_code),
+      members: ((members ?? []) as Row[]).map((m) => ({ userId: asText(m.user_id), name: asText(m.name, 'Ich') })),
+    },
   }
 }
 
@@ -410,6 +508,31 @@ export async function joinHousehold(
 
 export async function leaveHousehold(client: SupabaseClient, householdId: string, userId: string): Promise<void> {
   await client.from('household_members').delete().eq('household_id', householdId).eq('user_id', userId)
+}
+
+/**
+ * Einen neuen Einladungscode vergeben.
+ *
+ * Nötig, seit der Code in einem Link steckt: Ein Link wandert weiter, als man
+ * ihn geschickt hat – in einen Gruppenchat, in ein Backup, auf den
+ * Sperrbildschirm. Wer den alten ungültig machen will, kann das damit, ohne
+ * den Haushalt aufzulösen.
+ *
+ * Der Code ist eindeutig; bei einer Kollision wird schlicht neu gewürfelt.
+ */
+export async function rotateInviteCode(
+  client: SupabaseClient,
+  householdId: string,
+  neuerCode: () => string,
+): Promise<string> {
+  for (let versuch = 0; versuch < 5; versuch++) {
+    const code = neuerCode()
+    const { error } = await client.from('households').update({ invite_code: code }).eq('id', householdId)
+    if (!error) return code
+    const doppelt = (error.message ?? '').includes('duplicate key')
+    if (!doppelt) throw new Error(uebersetzeFehler(error.message ?? ''))
+  }
+  throw new Error('Es ließ sich kein freier Code finden. Bitte noch einmal versuchen.')
 }
 
 /** Meldungen der Datenbank in etwas übersetzen, das man lesen möchte. */
@@ -467,6 +590,7 @@ export async function pullAll(
     client.from('pot_entries').select('*').eq('user_id', args.userId),
     client.from('challenges').select('*').eq('user_id', args.userId),
     client.from('recurring_txs').select('*').eq('user_id', args.userId),
+    client.from('user_prefs').select('*').eq('user_id', args.userId).limit(1),
   ])
 
   const geteilt = args.householdId
@@ -479,7 +603,7 @@ export async function pullAll(
       ])
     : Promise.resolve(null)
 
-  const [[txs, pots, potEntries, challenges, recurring], shared] = await Promise.all([privat, geteilt])
+  const [[txs, pots, potEntries, challenges, recurring, prefs], shared] = await Promise.all([privat, geteilt])
 
   const incoming: Partial<State> = {
     txs: rows('txs', txs).map(txFromRow),
@@ -487,6 +611,17 @@ export async function pullAll(
     potEntries: rows('pot_entries', potEntries).map(potEntryFromRow),
     challenges: rows('challenges', challenges).map(challengeFromRow),
     recurringTxs: rows('recurring_txs', recurring).map(recurringFromRow),
+  }
+
+  const prefsZeile = rows('user_prefs', prefs)[0]
+  if (prefsZeile) {
+    const { categories, settings, prefsUpdatedAt } = prefsFromRow(prefsZeile)
+    // Nur mitgeben, was auch da ist: Eine leere Kategorienliste vom Server
+    // dürfte die vorhandene nie ersetzen – dann ließe sich nichts mehr
+    // erfassen. `mergeState` entscheidet danach über den Zeitstempel.
+    if (categories.length > 0) incoming.categories = categories
+    incoming.settings = settings as State['settings']
+    incoming.prefsUpdatedAt = prefsUpdatedAt
   }
 
   if (shared) {
@@ -532,6 +667,10 @@ export async function pushChanges(
   push('pot_entries', neuer(state.potEntries).map((entry) => potEntryToRow(entry, userId)))
   push('challenges', neuer(state.challenges).map((c) => challengeToRow(c, userId)))
   push('recurring_txs', neuer(state.recurringTxs).map((r) => recurringToRow(r, userId)))
+
+  if (state.prefsUpdatedAt > since) {
+    jobs.push(client.from('user_prefs').upsert(prefsToRow(state, userId), { onConflict: 'user_id' }))
+  }
 
   if (householdId) {
     push('shop_items', neuer(state.shopItems).map((item) => shopToRow(item, householdId)))

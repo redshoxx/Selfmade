@@ -30,7 +30,7 @@ Die Trennung ist der Kern des Datenmodells und nicht verhandelbar:
    Spartöpfe                    Vorrat
    Spar-Challenges              Notizzettel
    Wiederkehrende Buchungen     Einkaufs-Vorlagen
-                                Reihenfolge der Abteilungen
+   Kategorien und Budgets       Reihenfolge der Abteilungen
 ```
 
 Wer zusammen einkauft, muss dafür nicht sein Gehalt offenlegen. Einkaufsliste,
@@ -42,6 +42,11 @@ durchgesetzt über Zugriffsregeln in der Datenbank.
 für alle vier geteilten Bereiche. Wer schon vor dem Teilen eine Liste geführt
 hat, dessen Einträge wandern beim Beitritt vollständig mit – die eigene Liste
 und die geteilte werden zusammengelegt.
+
+Das Private wandert mit dem Konto, nicht mit dem Haushalt: Wer sich auf einem
+zweiten Gerät anmeldet, findet seine Buchungen samt Kategorien und Budgets
+wieder. Nur das Erscheinungsbild bleibt am Gerät – ob dunkel oder hell, ob es
+rüttelt, entscheidet man je Telefon.
 
 ---
 
@@ -216,14 +221,15 @@ es ein eigenes Supabase-Projekt. Der kostenlose Tarif reicht dafür aus.
 **1. Projekt anlegen.** Auf [supabase.com](https://supabase.com) ein neues
 Projekt erstellen. Als Region eine europäische wählen, das spart Laufzeit.
 
-**2. Schema einspielen.** Im Projekt auf *SQL Editor* gehen, den Inhalt von
-[`supabase/schema.sql`](supabase/schema.sql) einfügen und ausführen. Das Skript
-legt die Tabellen an, schaltet die Zugriffsregeln scharf und meldet
-Einkaufsliste und Vorrat für Live-Aktualisierung an. Es ist wiederholbar – ein
-zweiter Durchlauf schadet nicht.
+**2. Schema einspielen.** Im Projekt auf *SQL Editor* gehen, den **gesamten**
+Inhalt von [`supabase/schema.sql`](supabase/schema.sql) einfügen und ausführen.
+Das Skript legt die Tabellen an, schaltet die Zugriffsregeln scharf, erzeugt die
+Funktionen zum Anlegen und Beitreten und meldet die geteilten Tabellen für
+Live-Aktualisierung an. Es ist wiederholbar – ein zweiter Durchlauf schadet
+nicht.
 
 **3. Zugangsdaten eintragen.** Unter *Project Settings → API* stehen die
-Projekt-URL und der `anon`-Schlüssel. Beides in eine Datei `.env` im
+Projekt-URL und der publishable Schlüssel. Beides in eine Datei `.env` im
 Projektordner:
 
 ```sh
@@ -232,27 +238,31 @@ cp .env.example .env
 
 ```ini
 VITE_SUPABASE_URL=https://dein-projekt.supabase.co
-VITE_SUPABASE_ANON_KEY=dein-anon-key
+VITE_SUPABASE_ANON_KEY=sb_publishable_…
 ```
 
-> Der `anon`-Schlüssel ist für den Browser gedacht und darf öffentlich sein –
-> die Zugriffsregeln aus Schritt 2 sind das, was schützt. Der `service_role`-Schlüssel
-> gehört **niemals** hierher: Er umgeht sämtliche Regeln.
-
 **4. Anmeldung freischalten.** Unter *Authentication → Providers* muss *Email*
-aktiv sein. Ein Passwort braucht niemand; die App verschickt einen Anmeldelink.
-Unter *Authentication → URL Configuration* die Adresse eintragen, unter der die
-App läuft, damit der Link zurückführt.
+aktiv sein. Ein Passwort braucht niemand.
 
-**5. Haushalt anlegen und teilen.** In der App auf das Zahnrad, mit der
-E-Mail-Adresse anmelden, *Haushalt anlegen*. Es erscheint ein Einladungscode in
-der Form `K7M-2QD`. Den gibt deine Freundin bei sich unter *Beitreten* ein –
-ab dann sehen beide dieselbe Einkaufsliste und denselben Vorrat, Änderungen
-erscheinen binnen Sekunden auf dem anderen Gerät.
+Dann – und das ist der Schritt, den man leicht übersieht – unter
+*Authentication → Email Templates* in **beiden** Vorlagen (*Magic Link* und
+*Confirm signup*) den Code sichtbar machen. Eine Zeile genügt:
 
-**6. Nachsehen, ob es trägt.** In der App: Zahnrad → **Verbindung prüfen**. Die
-Liste geht Punkt für Punkt durch und nennt bei jedem Fehlschlag den nächsten
-Schritt:
+```html
+<p>Dein Code: <strong>{{ .Token }}</strong></p>
+```
+
+Warum das nötig ist, steht gleich im nächsten Abschnitt.
+
+Unter *Authentication → URL Configuration* zuletzt die Adresse eintragen, unter
+der die App läuft – als *Site URL* und unter *Redirect URLs*.
+
+**5. Haushalt anlegen und teilen.** In der App auf das Zahnrad → *Zu zweit
+nutzen*, anmelden, *Haushalt anlegen*, *Einladung schicken*. Fertig.
+
+**6. Nachsehen, ob es trägt.** Im selben Blatt ganz unten: *Es kommt nichts
+an? → Verbindung prüfen*. Die Liste geht Punkt für Punkt durch und nennt bei
+jedem Fehlschlag den nächsten Schritt:
 
 | Punkt | was er beantwortet |
 | --- | --- |
@@ -260,19 +270,63 @@ Schritt:
 | Server erreichbar | Antwortet das Projekt überhaupt? |
 | Angemeldet | Gilt die Sitzung? |
 | Tabellen | Ist `schema.sql` eingespielt? |
+| Beitreten | Gibt es die Funktion `join_household`? |
 | Haushalt | Gibt es einen – und wie viele Einträge liegen dort? |
 
-Der weitaus häufigste Grund, wenn nichts ankommt: Schritt 2 wurde übersprungen,
-die Tabellen fehlen. Die Prüfung sagt das dann ausdrücklich, statt pauschal
-„kein Kontakt zum Server“ zu behaupten – der Kontakt steht ja.
+Der weitaus häufigste Grund, wenn nichts ankommt: Schritt 2 wurde übersprungen
+oder nur zur Hälfte markiert. Die Prüfung sagt das dann ausdrücklich, statt
+pauschal „kein Kontakt zum Server“ zu behaupten – der Kontakt steht ja.
 
-> **Zu den Schlüsseln:** Supabase zeigt zwei. Der **publishable** (`sb_publishable_…`)
-> gehört in die App – er ist für den Browser gemacht und darf öffentlich sein.
-> Der **secret** (`sb_secret_…`) umgeht *sämtliche* Zugriffsregeln; wer ihn hat,
-> liest und ändert die Daten jedes Haushalts. Er darf niemals in die App, ins
-> Repository, in eine Nachricht oder in die Einstellungen des Hosters. Ist er
-> versehentlich irgendwo gelandet: in Supabase unter *Project Settings → API
-> Keys* widerrufen und neu erzeugen.
+> **Zu den Schlüsseln:** Supabase zeigt zwei. Der **publishable**
+> (`sb_publishable_…`) gehört in die App – er ist für den Browser gemacht und
+> darf öffentlich sein; was schützt, sind die Zugriffsregeln aus Schritt 2. Der
+> **secret** (`sb_secret_…`) umgeht *sämtliche* Regeln; wer ihn hat, liest und
+> ändert die Daten jedes Haushalts. Er darf niemals in die App, ins Repository,
+> in eine Nachricht oder in die Einstellungen des Hosters. Ist er versehentlich
+> irgendwo gelandet: in Supabase unter *Project Settings → API Keys* widerrufen
+> und neu erzeugen. Der Bau bricht ab, wenn er ihn im Bündel findet.
+
+---
+
+## Anmelden mit Code statt mit Link
+
+Beim Anmelden verschickt Supabase eine Mail, die beides enthält: einen Link und
+einen sechsstelligen Code. Die App fragt nach dem Code.
+
+Das ist keine Umständlichkeit, sondern der einzige Weg, der auf dem iPhone
+zuverlässig funktioniert. Eine vom Homescreen gestartete Web-App hat dort ihren
+**eigenen Speicher**, getrennt von Safari. Der Link in der Mail öffnet aber
+Safari – die Anmeldung landet dort und kommt in der App nie an. Man tippt, es
+passiert scheinbar nichts, und die App wirkt kaputt. Ein abgetippter Code
+bleibt, wo er eingegeben wurde.
+
+Der Link funktioniert weiterhin, wenn man die App im Browser benutzt. Zeigt die
+Mail keinen Code, fehlt `{{ .Token }}` in den Vorlagen – siehe Schritt 4 oben.
+
+---
+
+## Einladen per Link
+
+In der App: *Zu zweit nutzen → Einladung schicken*. Das öffnet das Teilen-Blatt
+des Telefons, in dem WhatsApp, Nachrichten und Mail schon stehen. Verschickt
+wird eine Adresse der Form:
+
+```
+https://deine-adresse.de/?beitreten=K7M-2QD
+```
+
+Wer sie antippt, landet in der App, meldet sich einmal an und ist danach
+**automatisch** im Haushalt – ohne Code abzutippen, ohne ein Menü zu suchen.
+Der Code überlebt den Umweg über die Anmeldung; ohne das wäre die Einladung
+genau dann verloren, wenn man sie braucht.
+
+Der Code lässt sich weiterhin vorlesen (*Lieber den Code vorlesen?*). Er kommt
+ohne I, O, 0 und 1 aus, damit sich niemand verhört. Und weil ein Link weiter
+wandert, als man ihn geschickt hat, lässt er sich dort auch **neu erzeugen** –
+der alte gilt dann nicht mehr, wer schon dabei ist, bleibt dabei.
+
+Eine Person gehört zu genau einem Haushalt. Wer einer neuen Einladung folgt,
+verlässt den alten; die App fragt vorher.
 
 ---
 
@@ -310,9 +364,6 @@ Danach läuft die App im Vollbild und offline.
 
 Jeder weitere Push auf den Branch veröffentlicht automatisch neu.
 
-Der Code ist zum Vorlesen gemacht: I, O, 0 und 1 kommen darin nicht vor, damit
-niemand an der Frage scheitert, ob das eine Null oder ein O war.
-
 ---
 
 ## Wie der Abgleich funktioniert
@@ -340,7 +391,7 @@ steht in der Monatssumme ein Cent, den niemand erklären kann.
 ```sh
 npm install
 npm run dev        # Entwicklungsserver auf Port 5173
-npm test           # 205 Tests
+npm test           # 233 Tests
 npm run typecheck
 npm run build      # Produktionsbündel nach dist/
 npm run build:single  # alles in einer HTML-Datei, nach dist-single/
@@ -348,7 +399,8 @@ npm run build:single  # alles in einer HTML-Datei, nach dist-single/
 
 `build:single` packt CSS und JavaScript in eine einzige Seite. Zum Herzeigen
 genügt dann eine Datei – doppelklicken, fertig, ohne Server und ohne
-Installation.
+Installation. Für den täglichen Gebrauch ist das nicht der Weg: Eine einzelne
+Datei bekommt keine Aktualisierungen, und der Anmeldelink findet nicht zurück.
 
 Die Symbole werden nicht mitgeliefert, sondern erzeugt:
 
@@ -373,6 +425,7 @@ src/
     quantity.ts     Menge und Name trennen, zusammenzählen, hoch- und runterzählen
     recurring.ts    Fällige Termine wiederkehrender Buchungen
     diagnose.ts     Verbindungsprüfung: was fehlt und was zu tun ist
+    einladung.ts    Einladungslink lesen, merken, weitergeben
     sync.ts         Übersetzung Datenbank ↔ App, Hoch- und Runterladen
     useApp.tsx      Zustand, Anmeldung und Abgleich als Kontext
   views/            Ein Bereich je Datei
@@ -382,7 +435,7 @@ supabase/
 ```
 
 Die Rechenlogik liegt vollständig in `lib/` und ist ohne Oberfläche testbar –
-alle 205 Tests laufen ohne Browser. Was in den Views steht, ist Darstellung.
+alle 233 Tests laufen ohne Browser. Was in den Views steht, ist Darstellung.
 
 ### Auf dem Telefon
 

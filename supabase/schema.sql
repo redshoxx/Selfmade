@@ -238,6 +238,20 @@ create table if not exists public.recurring_txs (
 
 create index if not exists recurring_txs_user_idx on public.recurring_txs (user_id);
 
+-- Kategorien und persönliche Einstellungen, eine Zeile je Konto.
+--
+-- Anders als Buchungen sind Kategorien keine Sammlung einzelner Datensätze,
+-- sondern ein Ganzes: Wer eine umbenennt, ändert die Liste. Deshalb liegen sie
+-- als JSON in einer Spalte mit einem Zeitstempel für das Ganze. Ohne diese
+-- Tabelle stünde auf einem zweiten Gerät bei jeder Buchung „Ohne Kategorie“ –
+-- die Buchungen kämen an, die Kategorien, auf die sie zeigen, nicht.
+create table if not exists public.user_prefs (
+  user_id    uuid primary key references auth.users (id) on delete cascade,
+  categories jsonb not null default '[]'::jsonb,
+  settings   jsonb not null default '{}'::jsonb,
+  updated_at bigint not null
+);
+
 -- ---------------------------------------------------------------------------
 --  Zeilenschutz
 --
@@ -257,6 +271,7 @@ alter table public.pots              enable row level security;
 alter table public.pot_entries       enable row level security;
 alter table public.challenges        enable row level security;
 alter table public.recurring_txs     enable row level security;
+alter table public.user_prefs        enable row level security;
 
 -- Haushalte: sichtbar für Mitglieder, anlegen darf jeder für sich selbst.
 drop policy if exists households_select on public.households;
@@ -329,7 +344,7 @@ do $$
 declare
   t text;
 begin
-  foreach t in array array['txs', 'pots', 'pot_entries', 'challenges', 'recurring_txs'] loop
+  foreach t in array array['txs', 'pots', 'pot_entries', 'challenges', 'recurring_txs', 'user_prefs'] loop
     execute format('drop policy if exists %I_all on public.%I', t, t);
     execute format(
       'create policy %I_all on public.%I for all to authenticated
@@ -401,6 +416,13 @@ begin
   values (target.id, auth.uid(), coalesce(nullif(trim(member_name), ''), 'Ich'))
   on conflict (household_id, user_id)
     do update set name = excluded.name;
+
+  -- Ein Haushalt je Person. Wer einer neuen Einladung folgt, verlässt den
+  -- alten Haushalt – sonst stünde er in zweien, und die App müsste raten,
+  -- welche Einkaufsliste gemeint ist. Genau dort brach sie vorher ab.
+  delete from public.household_members m
+  where m.user_id = auth.uid()
+    and m.household_id <> target.id;
 
   return target;
 end;

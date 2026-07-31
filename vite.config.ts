@@ -1,7 +1,19 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-export default defineConfig(({ mode }) => ({
+/**
+ * Die Zugangsdaten stehen bewusst nicht hier.
+ *
+ * Über `define` eingetragen würden sie jede andere Quelle *überschreiben* –
+ * auch die Einstellungen beim Hoster und eine lokale `.env`. Man trüge sie
+ * dort ein, es passierte nichts, und der Grund wäre nirgends zu sehen.
+ *
+ * Sie liegen deshalb als Rückfallwert in `src/lib/supabase.ts`: eingebaut,
+ * damit jeder Bau ohne weiteres Zutun läuft, aber von der Umgebung
+ * überstimmbar. Dort steht auch, warum der publishable key im Quelltext
+ * stehen darf.
+ */
+export default defineConfig({
   plugins: [react()],
   server: {
     host: true,
@@ -11,29 +23,4 @@ export default defineConfig(({ mode }) => ({
     // Ältere Safari-Versionen auf noch gepflegten iPhones sollen die Bundles lesen können.
     target: ['es2020', 'safari15'],
   },
-
-  /**
-   * Der Demo-Bau (`npm run build:demo`) bekommt keine Zugangsdaten.
-   *
-   * Er erzeugt eine einzelne HTML-Datei zum Weitergeben, und darin steht alles
-   * im Klartext. Wären die Zugangsdaten enthalten, könnte sich jeder Empfänger
-   * am fremden Supabase-Projekt anmelden und dort Haushalte anlegen.
-   *
-   * Bewusst hier und nicht über eine `.env.demo`: Eine sichtbare Datei mit
-   * leeren Feldern lädt dazu ein, sie auszufüllen – sie sieht nach der Stelle
-   * aus, an die die Zugangsdaten gehören. Hier eingetragen wirkt die Leerung
-   * dagegen unabhängig davon, was in irgendeiner `.env` steht.
-   */
-  define:
-    mode === 'demo'
-      ? {
-          'import.meta.env.VITE_SUPABASE_URL': '""',
-          'import.meta.env.VITE_SUPABASE_ANON_KEY': '""',
-        }
-      : {
-          'import.meta.env.VITE_SUPABASE_URL':
-            '"https://ecflcrigkfyhifekwfxq.supabase.co"',
-          'import.meta.env.VITE_SUPABASE_ANON_KEY':
-            '"sb_publishable_1EpIlW3NxMKtGL4MjF2xtg_aYacqCx3"',
-        },
-}))
+})

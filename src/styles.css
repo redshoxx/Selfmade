@@ -1435,6 +1435,63 @@ h2.section {
   color: var(--accent);
 }
 
+.notice-good {
+  background: var(--good-soft);
+  color: var(--good);
+}
+
+/* Ein Hinweis darf mehrzeilig werden – „Du bist jetzt bei …“ passt sonst
+   nicht auf ein Telefon, und abgeschnittene Rückmeldungen sind keine. */
+.notice > span:last-child {
+  min-width: 0;
+}
+
+/* --- Aufklappbares -------------------------------------------------------- */
+
+/*
+ * Nebenwege verstecken, ohne sie wegzunehmen: Einladungscode zum Vorlesen,
+ * Verbindungsprüfung. Wer den Hauptweg geht, soll sie nicht sehen; wer sie
+ * sucht, findet sie an der Stelle, an der er sie erwartet.
+ */
+details > summary {
+  cursor: pointer;
+  padding: 8px 2px;
+  /* Die Standardmarkierung von Safari sitzt zu weit außen und springt beim
+     Aufklappen. Ein eigenes Zeichen bleibt, wo es hingehört. */
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+}
+
+details > summary::-webkit-details-marker {
+  display: none;
+}
+
+details > summary::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-right: 1.6px solid currentColor;
+  border-bottom: 1.6px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease;
+  flex: none;
+}
+
+details[open] > summary::before {
+  transform: rotate(45deg);
+}
+
+/* Als Text mitten im Satz: gleiche Farbe wie ein Link, kein Kasten. */
+.link {
+  color: inherit;
+  text-decoration: underline;
+  font: inherit;
+  padding: 0;
+}
+
 /* --- Kleinkram ------------------------------------------------------------ */
 
 .muted {
