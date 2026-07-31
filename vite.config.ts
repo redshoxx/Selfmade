@@ -27,8 +27,8 @@ export default defineConfig(({ mode }) => ({
   define:
     mode === 'demo'
       ? {
-          'import.meta.env.VITE_SUPABASE_URL': '""',
-          'import.meta.env.VITE_SUPABASE_ANON_KEY': '""',
+          'import.meta.env.VITE_SUPABASE_URL': '"https://ecflcrigkfyhifekwfxq.supabase.co"',
+          'import.meta.env.VITE_SUPABASE_ANON_KEY': '"sb_publishable_1EpIlW3NxMKtGL4MjF2xtg_aYacqCx3"',
         }
       : {},
 }))
