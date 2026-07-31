@@ -7,8 +7,9 @@ import type { IsoDate } from './date'
  *
  *  - **Privat** – Buchungen, Spartöpfe, Challenges. Gehören einer Person und
  *    verlassen ihr Konto nicht.
- *  - **Geteilt** – Einkaufsliste und Vorrat. Gehören dem Haushalt und sind für
- *    alle sichtbar, die dazugehören.
+ *  - **Geteilt** – Einkaufsliste, Vorrat, Notizen, Vorlagen. Gehören allen,
+ *    die freigeschaltet sind, und zwar ohne einen Schritt dazwischen: Wer
+ *    sich anmeldet, ist drin.
  *
  * Wer zusammen einkauft, muss dafür nicht sein Gehalt offenlegen.
  */
@@ -204,19 +205,19 @@ export interface RecurringTx extends Entity {
   active: boolean
 }
 
-/* --- Haushalt ------------------------------------------------------------ */
+/* --- Wer mitliest -------------------------------------------------------- */
 
-export interface Member {
-  userId: string
+/**
+ * Eine freigeschaltete Person.
+ *
+ * Steht bewusst nicht im Zustand der App: Die Liste wird nur beim Öffnen der
+ * Einstellungen gebraucht und ist ohne Netz ohnehin nicht zu ändern. Sie
+ * offline vorzuhalten hieße, eine Zugangsliste zu speichern, die dann
+ * veraltet – und eine veraltete Zugangsliste ist schlimmer als keine.
+ */
+export interface Person {
+  email: string
   name: string
-}
-
-export interface Household {
-  id: string
-  name: string
-  /** Kurzer Code zum Weitergeben, z. B. „K7M-2QD“. */
-  inviteCode: string
-  members: Member[]
 }
 
 /* --- Gesamtzustand ------------------------------------------------------- */
@@ -251,7 +252,6 @@ export interface State {
   aisleOrder: Partial<Record<AisleId, number>>
   /* Rahmen */
   settings: Settings
-  household: Household | null
   /**
    * Wann Kategorien und Einstellungen zuletzt angefasst wurden.
    *

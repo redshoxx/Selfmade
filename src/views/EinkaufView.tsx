@@ -31,7 +31,7 @@ import { AbschlussSheet } from './AbschlussSheet'
 const SUCHE_AB = 12
 
 export function EinkaufView() {
-  const { state, dispatch } = useApp()
+  const { state, dispatch, session, zugang } = useApp()
   const [bereich, setBereich] = useState<'liste' | 'notizen'>('liste')
   const [draft, setDraft] = useState('')
   const [query, setQuery] = useState('')
@@ -141,12 +141,16 @@ export function EinkaufView() {
           </div>
         )}
 
-        {state.household && (
-          <div className="notice notice-info">
-            <span aria-hidden="true">👥</span>
+        {/* Nur der Ausnahmefall bekommt einen Hinweis. Dass die Liste geteilt
+            ist, ist der Normalzustand – ein Banner auf jedem Bildschirm, das
+            „alles in Ordnung“ meldet, liest nach zwei Tagen niemand mehr. */}
+        {(!session || zugang === false) && (
+          <div className="notice notice-warn">
+            <span aria-hidden="true">!</span>
             <span>
-              Geteilt mit {state.household.name}
-              {state.household.members.length > 1 && ` · ${state.household.members.length} Personen`}
+              {session
+                ? 'Diese Liste liegt nur auf diesem Gerät. Lass dich unter Zahnrad → Konto freischalten.'
+                : 'Nur auf diesem Gerät. Melde dich unter Zahnrad → Konto an, dann seht ihr dieselbe Liste.'}
             </span>
           </div>
         )}

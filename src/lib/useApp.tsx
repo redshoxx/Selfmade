@@ -9,8 +9,6 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { offeneEinladung, vergissEinladung } from './einladung'
-import { newInviteCode } from './id'
 import { pendingRuns } from './recurring'
 import {
   hasChangesSince,
@@ -23,17 +21,8 @@ import {
 } from './store'
 import { anmeldeFehlerAusAdresse, cloudConfigured, raeumeAnmeldeFehler, redirectTo, supabase } from './supabase'
 import { erklaereFehler } from './diagnose'
-import {
-  createHousehold as rpcCreate,
-  joinHousehold as rpcJoin,
-  leaveHousehold as rpcLeave,
-  loadHousehold,
-  pullAll,
-  pushChanges,
-  rotateInviteCode,
-  subscribeShared,
-} from './sync'
-import type { Household, State } from './types'
+import { pruefeZugang, pullAll, pushChanges, subscribeShared } from './sync'
+import type { State } from './types'
 
 /**
  * Der Rahmen um alles: Zustand, Anmeldung und Abgleich.
@@ -67,20 +56,18 @@ interface AppValue {
   /** Anmeldung mit dem sechsstelligen Code aus der Mail. */
   verifyCode: (email: string, token: string) => Promise<void>
   signOut: () => Promise<void>
-  createHousehold: (name: string) => Promise<void>
-  joinHousehold: (code: string) => Promise<void>
-  leaveHousehold: () => Promise<void>
-  /** Neuen Einladungscode vergeben; der alte gilt dann nicht mehr. */
-  renewInviteCode: () => Promise<void>
   /** Anmeldelink verschickt – die Oberfläche zeigt dann den Hinweis. */
   magicLinkSentTo: string | null
-  /** Ein Einladungslink wurde geöffnet und wartet auf den Beitritt. */
-  pendingInvite: string | null
-  /** Gerade beigetreten – für die Rückmeldung, dass es geklappt hat. */
-  joinedHousehold: string | null
-  clearJoined: () => void
-  /** Eine Einladung liegenlassen, ohne ihr zu folgen. */
-  dismissInvite: () => void
+  /**
+   * Ist diese Adresse für die geteilten Daten freigeschaltet?
+   *
+   * `null` heißt „noch nicht nachgesehen“. Die Unterscheidung ist wichtig:
+   * Eine nicht freigeschaltete Person bekommt von den Zugriffsregeln keine
+   * Fehlermeldung, sondern eine leere Liste – und eine leere Einkaufsliste
+   * sieht aus wie eine leere Einkaufsliste. Ohne diese Angabe wäre die Sperre
+   * unsichtbar.
+   */
+  zugang: boolean | null
 }
 
 const AppContext = createContext<AppValue | null>(null)
@@ -96,14 +83,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [cloudStatus, setCloudStatus] = useState<CloudStatus>(cloudConfigured ? 'abgemeldet' : 'aus')
   const [cloudError, setCloudError] = useState<string | null>(null)
   const [magicLinkSentTo, setMagicLinkSentTo] = useState<string | null>(null)
-  const [joinedHousehold, setJoinedHousehold] = useState<string | null>(null)
-
-  // Einen Einladungslink gleich beim Aufbau aufnehmen – vor allem anderen.
-  // Die Anmeldung führt gleich über den Server und kommt ohne die
-  // ursprüngliche Adresse zurück; wer erst danach nachsieht, sieht nichts mehr.
-  const [pendingInvite, setPendingInvite] = useState<string | null>(() =>
-    typeof window === 'undefined' ? null : offeneEinladung(),
-  )
+  const [zugang, setZugang] = useState<boolean | null>(null)
 
   const stateRef = useRef(state)
   stateRef.current = state
@@ -212,115 +192,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Einkaufsliste verlieren.
   }, [])
 
-  /* --- Haushalt --- */
-
-  /**
-   * Nachsehen, zu welchem Haushalt das Konto gehört.
-   *
-   * Bei einem Fehler bleibt der bekannte Haushalt stehen. Vorher wurde er
-   * gelöscht, sobald die Abfrage schiefging – ein Funkloch beim Start reichte,
-   * und die App bot wieder „Haushalt anlegen“ an, während nichts mehr geteilt
-   * wurde.
-   */
-  const refreshHousehold = useCallback(async (userId: string): Promise<Household | null> => {
-    if (!supabase) return null
-    const ergebnis = await loadHousehold(supabase, userId)
-    if (ergebnis.status === 'ok') {
-      dispatch({ type: 'household/set', household: ergebnis.household })
-      return ergebnis.household
-    }
-    if (ergebnis.status === 'keiner') {
-      dispatch({ type: 'household/set', household: null })
-      return null
-    }
-    return stateRef.current.household
-  }, [])
-
-  const createHousehold = useCallback(
-    async (name: string) => {
-      if (!supabase || !session) return
-      setCloudError(null)
-      try {
-        const household = await rpcCreate(supabase, {
-          name,
-          memberName: stateRef.current.settings.displayName,
-          code: newInviteCode(),
-        })
-        dispatch({ type: 'household/set', household })
-        await refreshHousehold(session.userId)
-      } catch (error) {
-        setCloudError(error instanceof Error ? error.message : 'Das hat nicht geklappt.')
-      }
-    },
-    [session, refreshHousehold],
-  )
-
-  const joinHousehold = useCallback(
-    async (code: string) => {
-      if (!supabase || !session) return
-      setCloudError(null)
-      try {
-        await rpcJoin(supabase, { code, memberName: stateRef.current.settings.displayName })
-        const household = await refreshHousehold(session.userId)
-        // Die Einladung ist eingelöst; sie darf beim nächsten Start nicht
-        // erneut aufpoppen.
-        vergissEinladung()
-        setPendingInvite(null)
-        if (household) setJoinedHousehold(household.name)
-      } catch (error) {
-        setCloudError(error instanceof Error ? error.message : 'Das hat nicht geklappt.')
-      }
-    },
-    [session, refreshHousehold],
-  )
-
-  const leaveHousehold = useCallback(async () => {
-    if (!supabase || !session || !stateRef.current.household) return
-    await rpcLeave(supabase, stateRef.current.household.id, session.userId)
-    dispatch({ type: 'household/set', household: null })
-  }, [session])
-
-  const renewInviteCode = useCallback(async () => {
-    if (!supabase || !session || !stateRef.current.household) return
-    setCloudError(null)
-    try {
-      await rotateInviteCode(supabase, stateRef.current.household.id, newInviteCode)
-      await refreshHousehold(session.userId)
-    } catch (error) {
-      setCloudError(error instanceof Error ? error.message : 'Das hat nicht geklappt.')
-    }
-  }, [session, refreshHousehold])
-
-  const clearJoined = useCallback(() => setJoinedHousehold(null), [])
-
-  const dismissInvite = useCallback(() => {
-    vergissEinladung()
-    setPendingInvite(null)
-  }, [])
-
-  /**
-   * Einem Einladungslink von selbst folgen.
-   *
-   * Nur, wenn noch kein Haushalt da ist. Wer schon in einem steht, würde durch
-   * einen versehentlich angetippten alten Link sonst aus seinem herausfallen –
-   * das entscheidet niemand außer ihm selbst, und dafür gibt es im Teilen-Blatt
-   * eine Schaltfläche.
-   */
-  const householdId = state.household?.id ?? null
-  useEffect(() => {
-    if (!pendingInvite || !session || householdId) return
-    void joinHousehold(pendingInvite)
-  }, [pendingInvite, session, householdId, joinHousehold])
-
   /* --- Abgleich --- */
 
   /**
-   * Hängt am Haushalt, nicht nur an der Anmeldung.
+   * Anmelden genügt: Danach läuft alles.
    *
-   * Sonst käme nach dem Beitritt nichts an: Die Einträge des anderen liegen
-   * schon auf dem Server, es gibt also keine Live-Änderung, auf die man
-   * horchen könnte. Ohne dieses zweite Auslösen sähe die Freundin nach dem
-   * Beitritt eine leere Liste – bis sie die App das nächste Mal neu startet.
+   * Erst wird nachgesehen, ob diese Adresse freigeschaltet ist – nicht aus
+   * Höflichkeit, sondern weil die Zugriffsregeln sonst schweigend leere Listen
+   * liefern und die App „verbunden“ meldete, während nichts ankommt.
    */
   useEffect(() => {
     if (!supabase || !session) return
@@ -329,13 +208,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ;(async () => {
       setCloudStatus('laedt')
       try {
-        const household = await refreshHousehold(session.userId)
+        const erlaubt = await pruefeZugang(supabase!)
         if (!active) return
+        setZugang(erlaubt)
 
-        const { incoming, errors } = await pullAll(supabase!, {
-          userId: session.userId,
-          householdId: household?.id ?? null,
-        })
+        const { incoming, errors } = await pullAll(supabase!, { userId: session.userId })
         if (!active) return
 
         // Fehlende Tabellen sind kein Grund, das Wenige wegzuwerfen, das
@@ -360,20 +237,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const zusammengefuehrt = mergeState(stateRef.current, incoming)
         dispatch({ type: 'sync/merge', incoming })
 
-        // Ab 0, nicht ab jetzt: Was lokal entstand, solange niemand angemeldet
-        // war – und alles, was vor dem Beitritt schon auf der Liste stand –
-        // muss mit. Sonst bliebe die eigene Einkaufsliste für immer auf dem
-        // Gerät, und genau diesen Weg geht man.
+        // Ab 0, nicht ab jetzt: Alles, was lokal entstand, solange niemand
+        // angemeldet war, muss mit. Sonst bliebe die eigene Einkaufsliste für
+        // immer auf dem Gerät – und genau diesen Weg geht man.
         const at = Date.now()
-        await pushChanges(supabase!, zusammengefuehrt, {
-          userId: session.userId,
-          householdId: household?.id ?? null,
-          since: 0,
-        })
+        await pushChanges(supabase!, zusammengefuehrt, { userId: session.userId, since: 0 })
         if (!active) return
         pushedUpTo.current = at
         setCloudStatus('verbunden')
-        setCloudError(null)
+        setCloudError(
+          erlaubt
+            ? null
+            : 'Diese Adresse ist für die gemeinsame Einkaufsliste nicht freigeschaltet. Deine Buchungen werden trotzdem gesichert.',
+        )
       } catch (error) {
         if (!active) return
         // Der lokale Bestand bleibt vollständig nutzbar – nur eben allein.
@@ -389,7 +265,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false
     }
-  }, [session, householdId, refreshHousehold])
+  }, [session])
 
   /* --- Laufender Abgleich --- */
 
@@ -404,11 +280,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!hasChangesSince(state, since)) return
 
       const at = Date.now()
-      void pushChanges(supabase!, state, {
-        userId: session.userId,
-        householdId: state.household?.id ?? null,
-        since,
-      })
+      void pushChanges(supabase!, state, { userId: session.userId, since })
         .then(() => {
           pushedUpTo.current = at
           setCloudStatus('verbunden')
@@ -426,11 +298,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   /* --- Live-Änderungen der anderen --- */
 
   useEffect(() => {
-    if (!supabase || !session || !householdId) return
-    return subscribeShared(supabase, householdId, (incoming) => {
+    // Auch ohne Freischaltung anmelden: Die Zugriffsregeln entscheiden, ob
+    // etwas durchkommt, und wer gerade erst freigeschaltet wurde, bekommt so
+    // die nächste Änderung sofort mit, ohne die App neu zu starten.
+    if (!supabase || !session) return
+    return subscribeShared(supabase, (incoming) => {
       dispatch({ type: 'sync/merge', incoming })
     })
-  }, [session, householdId])
+  }, [session])
 
   /* --- Wiederkehrende Buchungen nachholen --- */
 
@@ -466,15 +341,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       signIn,
       verifyCode,
       signOut,
-      createHousehold,
-      joinHousehold,
-      leaveHousehold,
-      renewInviteCode,
       magicLinkSentTo,
-      pendingInvite,
-      joinedHousehold,
-      clearJoined,
-      dismissInvite,
+      zugang,
     }),
     [
       state,
@@ -484,15 +352,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       signIn,
       verifyCode,
       signOut,
-      createHousehold,
-      joinHousehold,
-      leaveHousehold,
-      renewInviteCode,
       magicLinkSentTo,
-      pendingInvite,
-      joinedHousehold,
-      clearJoined,
-      dismissInvite,
+      zugang,
     ],
   )
 

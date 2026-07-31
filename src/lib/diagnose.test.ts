@@ -75,9 +75,7 @@ describe('pruefeVerbindung', () => {
   it('meldet fehlende Zugangsdaten und prüft nicht weiter', async () => {
     const checks = await pruefeVerbindung({
       client: null,
-      configured: false,
       userId: null,
-      householdId: null,
     })
     expect(zustand(checks, 'Zugangsdaten')?.state).toBe('fehler')
     expect(zustand(checks, 'Server erreichbar')?.state).toBe('uebersprungen')
@@ -85,7 +83,7 @@ describe('pruefeVerbindung', () => {
 
   it('meldet einen Netzfehler und bricht danach ab', async () => {
     const client = fakeClient(() => ({ data: null, error: { message: 'Failed to fetch' } }))
-    const checks = await pruefeVerbindung({ client, configured: true, userId: 'u1', householdId: null })
+    const checks = await pruefeVerbindung({ client, userId: 'u1' })
 
     expect(zustand(checks, 'Server erreichbar')?.state).toBe('fehler')
     expect(zustand(checks, 'Tabellen')?.state).toBe('uebersprungen')
@@ -97,7 +95,7 @@ describe('pruefeVerbindung', () => {
       data: null,
       error: { code: '42P01', message: 'relation does not exist' },
     }))
-    const checks = await pruefeVerbindung({ client, configured: true, userId: 'u1', householdId: null })
+    const checks = await pruefeVerbindung({ client, userId: 'u1' })
 
     expect(zustand(checks, 'Server erreichbar')?.state).toBe('ok')
     const tabellen = zustand(checks, 'Tabellen')
@@ -113,65 +111,70 @@ describe('pruefeVerbindung', () => {
         ? { data: null, error: { code: '42P01', message: 'does not exist' } }
         : { data: [], error: null },
     )
-    const checks = await pruefeVerbindung({ client, configured: true, userId: 'u1', householdId: null })
+    const checks = await pruefeVerbindung({ client, userId: 'u1' })
 
     const tabellen = zustand(checks, 'Tabellen')
     expect(tabellen?.state).toBe('warnung')
     expect(tabellen?.detail).toContain('notes')
   })
 
-  it('erkennt eine fehlende Beitrittsfunktion trotz vollständiger Tabellen', async () => {
+  it('erkennt eine fehlende Prüffunktion trotz vollständiger Tabellen', async () => {
     // Wer beim Einspielen nur den oberen Teil des Skripts markiert hat, bekommt
-    // alle Tabellen und keine Funktionen. Ein Code führt dann zu „Das hat nicht
-    // geklappt“, und man sucht an der falschen Stelle.
+    // alle Tabellen und keine Funktionen.
     const client = fakeClient((t) =>
-      t === 'rpc:join_household'
-        ? { data: null, error: { code: 'PGRST202', message: 'Could not find the function public.join_household' } }
+      t === 'rpc:ist_erlaubt'
+        ? { data: null, error: { code: 'PGRST202', message: 'Could not find the function public.ist_erlaubt' } }
         : { data: [], error: null },
     )
-    const checks = await pruefeVerbindung({ client, configured: true, userId: 'u1', householdId: null })
+    const checks = await pruefeVerbindung({ client, userId: 'u1' })
 
     expect(zustand(checks, 'Tabellen')?.state).toBe('ok')
-    const beitritt = zustand(checks, 'Beitreten')
-    expect(beitritt?.state).toBe('fehler')
-    expect(beitritt?.detail).toContain('join_household')
+    const frei = zustand(checks, 'Freigeschaltet')
+    expect(frei?.state).toBe('fehler')
+    expect(frei?.detail).toContain('ist_erlaubt')
   })
 
-  it('nimmt „Einladungscode nicht gefunden“ als Beweis, dass die Funktion da ist', async () => {
+  it('meldet eine nicht freigeschaltete Adresse als Warnung', async () => {
+    // Der wichtigste Punkt der ganzen Prüfung: Die Zugriffsregeln antworten
+    // einer nicht freigeschalteten Person nicht mit einem Fehler, sondern mit
+    // einer leeren Liste. Ohne diesen Punkt sähe die Sperre aus wie ein leerer
+    // Einkaufszettel – der einzige Fehlerfall, den niemand bemerkt.
     const client = fakeClient((t) =>
-      t === 'rpc:join_household'
-        ? { data: null, error: { code: 'P0001', message: 'Einladungscode nicht gefunden' } }
-        : { data: [], error: null },
+      t === 'rpc:ist_erlaubt' ? { data: false, error: null } : { data: [], error: null },
     )
-    const checks = await pruefeVerbindung({ client, configured: true, userId: 'u1', householdId: null })
-
-    expect(zustand(checks, 'Beitreten')?.state).toBe('ok')
-  })
-
-  it('meldet fehlenden Haushalt als Warnung, nicht als Fehler', async () => {
-    const client = fakeClient(() => ({ data: [], error: null }))
-    const checks = await pruefeVerbindung({ client, configured: true, userId: 'u1', householdId: null })
+    const checks = await pruefeVerbindung({ client, userId: 'u1' })
 
     expect(zustand(checks, 'Tabellen')?.state).toBe('ok')
-    expect(zustand(checks, 'Haushalt')?.state).toBe('warnung')
+    const frei = zustand(checks, 'Freigeschaltet')
+    expect(frei?.state).toBe('warnung')
+    expect(frei?.detail).toContain('nicht auf der Liste')
+  })
+
+  it('bestätigt eine freigeschaltete Adresse', async () => {
+    const client = fakeClient((t) =>
+      t === 'rpc:ist_erlaubt' ? { data: true, error: null } : { data: [], error: null },
+    )
+    const checks = await pruefeVerbindung({ client, userId: 'u1' })
+
+    expect(zustand(checks, 'Freigeschaltet')?.state).toBe('ok')
   })
 
   it('meldet fehlende Anmeldung', async () => {
     const client = fakeClient(() => ({ data: [], error: null }))
-    const checks = await pruefeVerbindung({ client, configured: true, userId: null, householdId: null })
+    const checks = await pruefeVerbindung({ client, userId: null })
 
     expect(zustand(checks, 'Angemeldet')?.state).toBe('fehler')
     // Der Hinweis nennt die Handlung, nicht den Zustand.
     expect(zustand(checks, 'Angemeldet')?.detail).toContain('E-Mail')
   })
 
-  it('zählt bei bestehendem Haushalt die Einträge auf dem Server', async () => {
+  it('zählt die Einträge auf dem Server', async () => {
     const client = fakeClient((t) => ({
       data: [],
       error: null,
       count: t === 'shop_items' ? 7 : t === 'pantry_items' ? 3 : 0,
     }))
-    const checks = await pruefeVerbindung({ client, configured: true, userId: 'u1', householdId: 'h1' })
+    const checks = await pruefeVerbindung({ client, userId: 'u1' })
 
     const daten = zustand(checks, 'Geteilte Daten')
     expect(daten?.state).toBe('ok')
@@ -183,7 +186,7 @@ describe('pruefeVerbindung', () => {
     // Wer sieht, wie weit es trägt, löst nicht einen Punkt nach dem anderen
     // und startet jedes Mal neu.
     const client = fakeClient(() => ({ data: [], error: null }))
-    const checks = await pruefeVerbindung({ client, configured: true, userId: null, householdId: null })
+    const checks = await pruefeVerbindung({ client, userId: null })
     expect(checks.length).toBeGreaterThanOrEqual(4)
   })
 })

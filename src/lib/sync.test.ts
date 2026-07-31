@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { loadHousehold, pullAll } from './sync'
+import { ladeErlaubte, pruefeZugang, pullAll } from './sync'
 
 /**
  * Ein vorgetäuschter Client.
@@ -20,6 +20,7 @@ function fakeClient(antwort: (tabelle: string) => { data: unknown; error: unknow
         eq: () => kette,
         limit: () => kette,
         maybeSingle: () => Promise.resolve(antwort(tabelle)),
+        order: () => kette,
         then: (
           erfuellt: (wert: { data: unknown; error: unknown }) => unknown,
           abgelehnt?: (grund: unknown) => unknown,
@@ -27,10 +28,11 @@ function fakeClient(antwort: (tabelle: string) => { data: unknown; error: unknow
       }
       return kette
     },
+    rpc: (name: string) => Promise.resolve(antwort(`rpc:${name}`)),
   } as never
 }
 
-const args = { userId: 'u1', householdId: 'h1' }
+const args = { userId: 'u1' }
 
 describe('pullAll', () => {
   it('liefert Daten und keine Fehler, wenn alles gut geht', async () => {
@@ -134,63 +136,56 @@ describe('pullAll', () => {
     expect(errors.map((e) => e.table)).toEqual(['notes'])
   })
 
-  it('fragt ohne Haushalt nur die privaten Tabellen ab', async () => {
+  it('fragt die geteilten Tabellen ohne Bedingung ab', async () => {
+    // Früher hing das an einem Haushalt: Wer keinen hatte, bekam die geteilten
+    // Tabellen gar nicht erst zu sehen – und merkte nicht, dass seine Liste
+    // nur auf dem Gerät lag. Jetzt wird immer gefragt; wer etwas sehen darf,
+    // entscheiden die Zugriffsregeln in der Datenbank.
     const gefragt: string[] = []
     const client = fakeClient((t) => {
       gefragt.push(t)
       return { data: [], error: null }
     })
-    await pullAll(client, { userId: 'u1', householdId: null })
+    await pullAll(client, { userId: 'u1' })
 
     expect(gefragt).toContain('txs')
-    expect(gefragt).not.toContain('shop_items')
+    expect(gefragt).toContain('shop_items')
+    expect(gefragt).toContain('pantry_items')
+    expect(gefragt).toContain('notes')
   })
 })
 
-describe('loadHousehold', () => {
-  it('unterscheidet „kein Haushalt“ von „konnte nicht nachsehen“', async () => {
-    // Der Unterschied ist der Grund für den Rückgabetyp: Vorher galt jeder
-    // Fehler als „gehört zu keinem Haushalt“. Ein Funkloch beim Start reichte
-    // dann, und die App vergaß den Haushalt samt Teilen.
-    const kaputt = fakeClient(() => ({ data: null, error: { message: 'Failed to fetch' } }))
-    await expect(loadHousehold(kaputt, 'u1')).resolves.toEqual({
-      status: 'fehler',
-      error: { message: 'Failed to fetch' },
-    })
+describe('Zugangsliste', () => {
+  it('liest, wer mitlesen darf', async () => {
+    const client = fakeClient(() => ({
+      data: [
+        { email: 'wolfgang@example.com', name: 'Wolfgang' },
+        { email: 'freundin@example.com', name: 'Freundin' },
+      ],
+      error: null,
+    }))
 
-    const leer = fakeClient(() => ({ data: [], error: null }))
-    await expect(loadHousehold(leer, 'u1')).resolves.toEqual({ status: 'keiner' })
+    await expect(ladeErlaubte(client)).resolves.toEqual([
+      { email: 'wolfgang@example.com', name: 'Wolfgang' },
+      { email: 'freundin@example.com', name: 'Freundin' },
+    ])
   })
 
-  it('liest Haushalt und Mitglieder', async () => {
-    const client = fakeClient((t) => {
-      if (t === 'household_members') {
-        return {
-          data: [
-            { household_id: 'h1', user_id: 'u1', name: 'Wolfgang' },
-            { household_id: 'h1', user_id: 'u2', name: 'Freundin' },
-          ],
-          error: null,
-        }
-      }
-      return { data: { id: 'h1', name: 'Zuhause', invite_code: 'K7M-2QD' }, error: null }
-    })
+  it('sagt bei fehlenden Tabellen, was zu tun ist', async () => {
+    // „Das hat nicht geklappt“ schickt in die falsche Richtung, wenn nur das
+    // Schema fehlt.
+    const client = fakeClient(() => ({
+      data: null,
+      error: { code: 'PGRST205', message: 'Could not find the table' },
+    }))
 
-    const ergebnis = await loadHousehold(client, 'u1')
-    expect(ergebnis.status).toBe('ok')
-    if (ergebnis.status !== 'ok') return
-    expect(ergebnis.household.inviteCode).toBe('K7M-2QD')
-    expect(ergebnis.household.members.map((m) => m.name)).toEqual(['Wolfgang', 'Freundin'])
+    await expect(ladeErlaubte(client)).rejects.toThrow(/schema\.sql/)
   })
 
-  it('meldet „keiner“, wenn der Haushalt zur Mitgliedschaft fehlt', async () => {
-    // Aufgelöster Haushalt: Die Mitgliedschaft zeigt ins Leere. Das ist keine
-    // Störung, sondern eine klare Antwort – die App soll den Beitritt anbieten.
-    const client = fakeClient((t) =>
-      t === 'household_members'
-        ? { data: [{ household_id: 'h1' }], error: null }
-        : { data: null, error: null },
-    )
-    await expect(loadHousehold(client, 'u1')).resolves.toEqual({ status: 'keiner' })
+  it('beantwortet die Freischaltung als klares Ja oder Nein', async () => {
+    // Ein `null` vom Server darf nie als „darf mitlesen“ durchgehen.
+    await expect(pruefeZugang(fakeClient(() => ({ data: true, error: null })))).resolves.toBe(true)
+    await expect(pruefeZugang(fakeClient(() => ({ data: false, error: null })))).resolves.toBe(false)
+    await expect(pruefeZugang(fakeClient(() => ({ data: null, error: null })))).resolves.toBe(false)
   })
 })

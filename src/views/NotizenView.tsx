@@ -53,13 +53,6 @@ export function NotizenView({ onBack }: { onBack: () => void }) {
           </button>
         </div>
 
-        {state.household && (
-          <div className="notice notice-info">
-            <span aria-hidden="true">👥</span>
-            <span>Geteilt mit {state.household.name}</span>
-          </div>
-        )}
-
         {notes.length === 0 ? (
           <Empty
             emoji="📝"

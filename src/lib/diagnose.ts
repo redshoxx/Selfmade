@@ -12,8 +12,8 @@ import type { SupabaseClient } from '@supabase/supabase-js'
  * weiß, wie Supabase aufgebaut ist.
  */
 
-/** Tabellen, ohne die das Teilen nicht funktioniert. */
-const GETEILTE_TABELLEN = ['households', 'household_members', 'shop_items', 'pantry_items'] as const
+/** Tabellen, ohne die das Gemeinsame nicht funktioniert. */
+const GETEILTE_TABELLEN = ['erlaubte_personen', 'shop_items', 'pantry_items'] as const
 const PRIVATE_TABELLEN = ['txs', 'pots', 'challenges'] as const
 /** Später ergänzt – ihr Fehlen ist kein Grund zur Panik, nur ein Hinweis. */
 const SPAETERE_TABELLEN = ['notes', 'shop_templates', 'recurring_txs', 'user_prefs'] as const
@@ -92,9 +92,7 @@ export function erklaereFehler(error: PostgrestLikeError | null | undefined): st
 
 export interface DiagnoseInput {
   client: SupabaseClient | null
-  configured: boolean
   userId: string | null
-  householdId: string | null
 }
 
 /**
@@ -130,11 +128,11 @@ async function sicher<T>(
  * jedes Mal neu.
  */
 export async function pruefeVerbindung(input: DiagnoseInput): Promise<CheckResult[]> {
-  const { client, configured, userId, householdId } = input
+  const { client, userId } = input
   const out: CheckResult[] = []
 
   out.push(
-    configured && client
+    client
       ? { label: 'Zugangsdaten', state: 'ok', detail: 'Projekt-Adresse und Schlüssel sind hinterlegt.' }
       : {
           label: 'Zugangsdaten',
@@ -143,8 +141,8 @@ export async function pruefeVerbindung(input: DiagnoseInput): Promise<CheckResul
         },
   )
 
-  if (!configured || !client) {
-    for (const label of ['Server erreichbar', 'Angemeldet', 'Tabellen', 'Haushalt']) {
+  if (!client) {
+    for (const label of ['Server erreichbar', 'Angemeldet', 'Tabellen', 'Freigeschaltet']) {
       out.push({ label, state: 'uebersprungen', detail: 'Ohne Zugangsdaten nicht prüfbar.' })
     }
     return out
@@ -152,11 +150,11 @@ export async function pruefeVerbindung(input: DiagnoseInput): Promise<CheckResul
 
   // Erreichbarkeit und Tabellen zugleich: Eine einzelne, sehr kleine Abfrage
   // beantwortet beides. Kommt gar keine Antwort, ist es das Netz.
-  const probe = await sicher(() => client.from('households').select('id').limit(1))
+  const probe = await sicher(() => client.from('erlaubte_personen').select('*').limit(1))
 
   if (probe.error && istNetzfehler(probe.error)) {
     out.push({ label: 'Server erreichbar', state: 'fehler', detail: erklaereFehler(probe.error) })
-    for (const label of ['Angemeldet', 'Tabellen', 'Haushalt']) {
+    for (const label of ['Angemeldet', 'Tabellen', 'Freigeschaltet']) {
       out.push({ label, state: 'uebersprungen', detail: 'Erst muss der Server antworten.' })
     }
     return out
@@ -170,7 +168,7 @@ export async function pruefeVerbindung(input: DiagnoseInput): Promise<CheckResul
       : {
           label: 'Angemeldet',
           state: 'fehler',
-          detail: 'Noch nicht angemeldet. Trag oben deine E-Mail-Adresse ein und öffne den Link.',
+          detail: 'Noch nicht angemeldet. Trag oben deine E-Mail-Adresse ein und tipp den Code aus der Mail.',
         },
   )
 
@@ -213,41 +211,50 @@ export async function pruefeVerbindung(input: DiagnoseInput): Promise<CheckResul
   }
 
   /*
-   * Die Beitrittsfunktion.
+   * Bin ich freigeschaltet?
    *
-   * Tabellen allein genügen nicht: Der Beitritt läuft über eine Funktion in
-   * der Datenbank, und die kann fehlen, während alle Tabellen stehen – etwa
-   * wenn beim Einspielen nur der obere Teil des Skripts markiert war. Wer
-   * dann einen Code eingibt, bekommt „Das hat nicht geklappt“ und sucht an
-   * der falschen Stelle.
+   * Diese Frage muss ausdrücklich gestellt werden, und sie ist der Kern der
+   * ganzen Prüfung. Die Zugriffsregeln liefern einer nicht freigeschalteten
+   * Person keine Fehlermeldung, sondern eine **leere Liste** – und eine leere
+   * Einkaufsliste sieht aus wie eine leere Einkaufsliste, nicht wie eine
+   * Sperre. Ohne diesen Punkt wäre der häufigste Fehlerfall der einzige, den
+   * niemand bemerkt.
    *
-   * Geprüft wird mit einem Code, den es nicht geben kann. Antwortet die
-   * Datenbank mit „Einladungscode nicht gefunden“, ist die Funktion da.
+   * Nebenbei belegt der Aufruf, dass die Funktion überhaupt existiert: Sie
+   * kann fehlen, während alle Tabellen stehen – etwa wenn beim Einspielen nur
+   * der obere Teil des Skripts markiert war.
    */
-  const beitritt = await sicher(() =>
-    client.rpc('join_household', { code: 'PRUEFUNG-KEIN-TREFFER', member_name: 'Prüfung' }),
-  )
-  const beitrittsText = (beitritt.error?.message ?? '').toLowerCase()
+  const freigabe = await sicher(() => client.rpc('ist_erlaubt') as never)
+  const freigabeText = (freigabe.error?.message ?? '').toLowerCase()
   const fehltFunktion =
-    beitritt.error !== null &&
-    // PGRST202 meldet die fehlende Funktion. PGRST205 kommt dazu, weil bei
-    // gänzlich fehlendem Schema der Fehler aus dem Zwischenspeicher von
-    // PostgREST stammt und dann von der Tabelle spricht – in einem Aufruf, in
-    // dem es gar keine Tabelle gibt. Beides heißt hier dasselbe.
-    (beitritt.error.code === 'PGRST202' ||
-      beitritt.error.code === 'PGRST205' ||
-      beitrittsText.includes('could not find') ||
-      beitrittsText.includes('does not exist'))
+    freigabe.error !== null &&
+    (freigabe.error.code === 'PGRST202' ||
+      freigabe.error.code === 'PGRST205' ||
+      freigabeText.includes('could not find') ||
+      freigabeText.includes('does not exist'))
 
-  out.push(
-    fehltFunktion
-      ? {
-          label: 'Beitreten',
-          state: 'fehler',
-          detail: 'Die Funktion join_household fehlt. Spiel supabase/schema.sql vollständig ein.',
-        }
-      : { label: 'Beitreten', state: 'ok', detail: 'Einladungscodes lassen sich einlösen.' },
-  )
+  if (fehltFunktion) {
+    out.push({
+      label: 'Freigeschaltet',
+      state: 'fehler',
+      detail: 'Die Funktion ist_erlaubt fehlt. Spiel supabase/schema.sql vollständig ein.',
+    })
+  } else if (freigabe.error) {
+    out.push({ label: 'Freigeschaltet', state: 'fehler', detail: erklaereFehler(freigabe.error) })
+  } else if (freigabe.data === true) {
+    out.push({
+      label: 'Freigeschaltet',
+      state: 'ok',
+      detail: 'Diese Adresse sieht Einkaufsliste, Vorrat und Notizen.',
+    })
+  } else {
+    out.push({
+      label: 'Freigeschaltet',
+      state: 'warnung',
+      detail:
+        'Diese Adresse steht nicht auf der Liste. Trag sie in supabase/schema.sql ein und spiel es ein – oder lass dich von jemandem freischalten, der schon dabei ist.',
+    })
+  }
 
   if (gesperrt.length > 0) {
     out.push({
@@ -257,23 +264,10 @@ export async function pruefeVerbindung(input: DiagnoseInput): Promise<CheckResul
     })
   }
 
-  /* Haushalt und tatsächlich lesbare Daten. */
-  if (!householdId) {
-    out.push({
-      label: 'Haushalt',
-      state: 'warnung',
-      detail: 'Noch kein Haushalt. Leg einen an oder tritt mit einem Code bei – erst dann wird geteilt.',
-    })
-    return out
-  }
-
+  /* Was tatsächlich auf dem Server liegt. */
   const [liste, vorrat] = await Promise.all([
-    sicher(() =>
-      client.from('shop_items').select('id', { count: 'exact', head: true }).eq('household_id', householdId),
-    ),
-    sicher(() =>
-      client.from('pantry_items').select('id', { count: 'exact', head: true }).eq('household_id', householdId),
-    ),
+    sicher(() => client.from('shop_items').select('*', { count: 'exact', head: true })),
+    sicher(() => client.from('pantry_items').select('*', { count: 'exact', head: true })),
   ])
 
   if (liste.error || vorrat.error) {

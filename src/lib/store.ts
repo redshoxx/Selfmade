@@ -6,7 +6,6 @@ import type {
   Category,
   Challenge,
   Entity,
-  Household,
   Note,
   PantryItem,
   Pot,
@@ -69,7 +68,6 @@ export function initialState(): State {
     shopTemplates: [],
     aisleOrder: {},
     settings: { ...DEFAULT_SETTINGS },
-    household: null,
     prefsUpdatedAt: 0,
   }
 }
@@ -162,7 +160,6 @@ export type Action =
    */
   | { type: 'undo/restore'; list: UndoableList; ids: string[] }
   | { type: 'settings/update'; patch: Partial<Settings> }
-  | { type: 'household/set'; household: Household | null }
   | { type: 'sync/merge'; incoming: Partial<State> }
   | { type: 'state/replace'; state: State }
 
@@ -507,8 +504,6 @@ export function reducer(state: State, action: Action): State {
     /* --- Rahmen --- */
     case 'settings/update':
       return { ...state, settings: { ...state.settings, ...action.patch }, prefsUpdatedAt: Date.now() }
-    case 'household/set':
-      return { ...state, household: action.household }
     case 'sync/merge':
       return mergeState(state, action.incoming)
     case 'state/replace':
@@ -578,7 +573,6 @@ export function mergeState(state: State, incoming: Partial<State>): State {
     categories: prefsNeuer && incoming.categories?.length ? incoming.categories : state.categories,
     settings: prefsNeuer && incoming.settings ? { ...state.settings, ...incoming.settings } : state.settings,
     aisleOrder: { ...state.aisleOrder, ...incoming.aisleOrder },
-    household: incoming.household ?? state.household,
   }
 }
 
@@ -760,26 +754,6 @@ export function loadState(raw: string | null): State {
 
   if (typeof data.prefsUpdatedAt === 'number' && Number.isFinite(data.prefsUpdatedAt)) {
     state.prefsUpdatedAt = data.prefsUpdatedAt
-  }
-
-  if (data.household && typeof data.household === 'object') {
-    const h = data.household as Record<string, unknown>
-    if (typeof h.id === 'string' && typeof h.inviteCode === 'string') {
-      state.household = {
-        id: h.id,
-        name: typeof h.name === 'string' ? h.name : 'Haushalt',
-        inviteCode: h.inviteCode,
-        members: Array.isArray(h.members)
-          ? (h.members as unknown[]).filter(
-              (m): m is { userId: string; name: string } =>
-                !!m &&
-                typeof m === 'object' &&
-                typeof (m as Record<string, unknown>).userId === 'string' &&
-                typeof (m as Record<string, unknown>).name === 'string',
-            )
-          : [],
-      }
-    }
   }
 
   return state

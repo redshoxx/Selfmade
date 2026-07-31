@@ -3,11 +3,11 @@ import type {
   AisleId,
   Category,
   Challenge,
-  Household,
   Note,
   PantryItem,
   Pot,
   PotEntry,
+  Person,
   RecurringTx,
   Settings,
   ShopItem,
@@ -62,10 +62,9 @@ function shopFromRow(row: Row): ShopItem {
   }
 }
 
-function shopToRow(item: ShopItem, householdId: string): Row {
+function shopToRow(item: ShopItem): Row {
   return {
     id: item.id,
-    household_id: householdId,
     name: item.name,
     qty: item.qty,
     aisle: item.aisle,
@@ -94,10 +93,9 @@ function pantryFromRow(row: Row): PantryItem {
   }
 }
 
-function pantryToRow(item: PantryItem, householdId: string): Row {
+function pantryToRow(item: PantryItem): Row {
   return {
     id: item.id,
-    household_id: householdId,
     name: item.name,
     aisle: item.aisle,
     qty: item.qty,
@@ -123,10 +121,9 @@ function noteFromRow(row: Row): Note {
   }
 }
 
-function noteToRow(note: Note, householdId: string): Row {
+function noteToRow(note: Note): Row {
   return {
     id: note.id,
-    household_id: householdId,
     title: note.title,
     body: note.body,
     pinned: note.pinned,
@@ -157,10 +154,9 @@ function templateFromRow(row: Row): ShopTemplate {
   }
 }
 
-function templateToRow(template: ShopTemplate, householdId: string): Row {
+function templateToRow(template: ShopTemplate): Row {
   return {
     id: template.id,
-    household_id: householdId,
     name: template.name,
     emoji: template.emoji,
     items: template.items,
@@ -417,131 +413,66 @@ export const rowCodecs = {
   prefsToRow,
 }
 
-/* --- Haushalt -------------------------------------------------------------- */
+/* --- Wer mitliest ---------------------------------------------------------- */
 
 /**
- * Was beim Nachsehen herauskam.
+ * Die Zugangsliste.
  *
- * Die Unterscheidung ist nicht Formsache. Vorher lieferte diese Funktion bei
- * jedem Fehler `null`, und der Aufrufer las das als „gehört zu keinem
- * Haushalt“ – ein kurzer Netzaussetzer beim Start ließ die App den Haushalt
- * also vergessen. Danach stand da wieder „Haushalt anlegen“, und nichts wurde
- * mehr geteilt, bis jemand die App neu startete. „Konnte nicht nachsehen“ und
- * „gibt es nicht“ sind zwei verschiedene Antworten und müssen es bleiben.
+ * Sie ersetzt Haushalt, Einladungscode und Beitreten – drei Schritte, an denen
+ * man scheitern konnte, für eine Frage, die zu zweit ohnehin nur einmal
+ * beantwortet wird. Wer draufsteht, sieht dieselbe Einkaufsliste; sonst
+ * niemand. Nötig ist die Liste, weil der Schlüssel der App öffentlich ist:
+ * Ohne sie käme jeder hinein, der die Adresse kennt.
  */
-export type HouseholdLookup =
-  | { status: 'ok'; household: Household }
-  | { status: 'keiner' }
-  | { status: 'fehler'; error: { code?: string; message?: string } }
 
-export async function loadHousehold(client: SupabaseClient, userId: string): Promise<HouseholdLookup> {
-  // `limit(1)` statt `maybeSingle()`: Letzteres bricht mit einem Fehler ab,
-  // sobald jemand in zwei Haushalten steht. Das soll nach `join_household`
-  // nicht mehr vorkommen – aber ein Altbestand darf die App nicht lahmlegen.
-  const { data: membership, error } = await client
-    .from('household_members')
-    .select('household_id')
-    .eq('user_id', userId)
-    .limit(1)
-  if (error) return { status: 'fehler', error: error as { code?: string; message?: string } }
-
-  const first = ((membership ?? []) as Row[])[0]
-  if (!first) return { status: 'keiner' }
-
-  const householdId = asText(first.household_id)
-  const [{ data: household, error: haushaltFehler }, { data: members }] = await Promise.all([
-    client.from('households').select('id, name, invite_code').eq('id', householdId).maybeSingle(),
-    client.from('household_members').select('user_id, name').eq('household_id', householdId),
-  ])
-  if (haushaltFehler) return { status: 'fehler', error: haushaltFehler as { code?: string; message?: string } }
-  // Mitgliedschaft ohne Haushalt: der Haushalt wurde aufgelöst.
-  if (!household) return { status: 'keiner' }
-
-  const row = household as Row
-  return {
-    status: 'ok',
-    household: {
-      id: asText(row.id),
-      name: asText(row.name, 'Haushalt'),
-      inviteCode: asText(row.invite_code),
-      members: ((members ?? []) as Row[]).map((m) => ({ userId: asText(m.user_id), name: asText(m.name, 'Ich') })),
-    },
-  }
-}
-
-export async function createHousehold(
-  client: SupabaseClient,
-  args: { name: string; memberName: string; code: string },
-): Promise<Household> {
-  const { data, error } = await client.rpc('create_household', {
-    household_name: args.name,
-    member_name: args.memberName,
-    code: args.code,
-  })
+export async function ladeErlaubte(client: SupabaseClient): Promise<Person[]> {
+  const { data, error } = await client.from('erlaubte_personen').select('email, name').order('email')
   if (error) throw new Error(uebersetzeFehler(error.message))
-  const row = (Array.isArray(data) ? data[0] : data) as Row
-  return {
-    id: asText(row.id),
-    name: asText(row.name, 'Haushalt'),
-    inviteCode: asText(row.invite_code),
-    members: [{ userId: '', name: args.memberName }],
-  }
+  return ((data ?? []) as Row[]).map((row) => ({
+    email: asText(row.email),
+    name: asText(row.name),
+  }))
 }
 
-export async function joinHousehold(
-  client: SupabaseClient,
-  args: { code: string; memberName: string },
-): Promise<Household> {
-  const { data, error } = await client.rpc('join_household', {
-    code: args.code,
-    member_name: args.memberName,
-  })
+export async function erlaubePerson(client: SupabaseClient, email: string, name: string): Promise<void> {
+  // Kleingeschrieben abgelegt, damit „Anna@…“ und „anna@…“ dieselbe Person
+  // sind. Die Prüfung in der Datenbank vergleicht ebenfalls kleingeschrieben.
+  const { error } = await client
+    .from('erlaubte_personen')
+    .upsert({ email: email.trim().toLowerCase(), name: name.trim() }, { onConflict: 'email' })
   if (error) throw new Error(uebersetzeFehler(error.message))
-  const row = (Array.isArray(data) ? data[0] : data) as Row
-  return {
-    id: asText(row.id),
-    name: asText(row.name, 'Haushalt'),
-    inviteCode: asText(row.invite_code),
-    members: [],
-  }
 }
 
-export async function leaveHousehold(client: SupabaseClient, householdId: string, userId: string): Promise<void> {
-  await client.from('household_members').delete().eq('household_id', householdId).eq('user_id', userId)
+export async function entfernePerson(client: SupabaseClient, email: string): Promise<void> {
+  const { error } = await client.from('erlaubte_personen').delete().eq('email', email.trim().toLowerCase())
+  if (error) throw new Error(uebersetzeFehler(error.message))
 }
 
 /**
- * Einen neuen Einladungscode vergeben.
+ * Bin ich freigeschaltet?
  *
- * Nötig, seit der Code in einem Link steckt: Ein Link wandert weiter, als man
- * ihn geschickt hat – in einen Gruppenchat, in ein Backup, auf den
- * Sperrbildschirm. Wer den alten ungültig machen will, kann das damit, ohne
- * den Haushalt aufzulösen.
- *
- * Der Code ist eindeutig; bei einer Kollision wird schlicht neu gewürfelt.
+ * Diese Frage muss ausdrücklich gestellt werden. Die Zugriffsregeln liefern
+ * einer nicht freigeschalteten Person keine Fehlermeldung, sondern schlicht
+ * eine **leere Liste** – und eine leere Einkaufsliste sieht aus wie eine
+ * leere Einkaufsliste, nicht wie eine Sperre. Ohne diese Prüfung wäre der
+ * häufigste Fehlerfall der einzige, den man nicht bemerkt.
  */
-export async function rotateInviteCode(
-  client: SupabaseClient,
-  householdId: string,
-  neuerCode: () => string,
-): Promise<string> {
-  for (let versuch = 0; versuch < 5; versuch++) {
-    const code = neuerCode()
-    const { error } = await client.from('households').update({ invite_code: code }).eq('id', householdId)
-    if (!error) return code
-    const doppelt = (error.message ?? '').includes('duplicate key')
-    if (!doppelt) throw new Error(uebersetzeFehler(error.message ?? ''))
-  }
-  throw new Error('Es ließ sich kein freier Code finden. Bitte noch einmal versuchen.')
+export async function pruefeZugang(client: SupabaseClient): Promise<boolean> {
+  const { data, error } = await client.rpc('ist_erlaubt')
+  if (error) throw new Error(uebersetzeFehler(error.message))
+  return data === true
 }
 
 /** Meldungen der Datenbank in etwas übersetzen, das man lesen möchte. */
 function uebersetzeFehler(message: string): string {
-  if (message.includes('Einladungscode nicht gefunden')) return 'Diesen Einladungscode gibt es nicht.'
-  if (message.includes('duplicate key') && message.includes('invite_code')) {
-    return 'Dieser Code ist schon vergeben. Bitte noch einmal versuchen.'
+  const text = message.toLowerCase()
+  if (text.includes('duplicate key')) return 'Diese Adresse steht schon auf der Liste.'
+  if (text.includes('row-level security') || text.includes('permission denied')) {
+    return 'Dafür fehlt dir die Berechtigung. Nur wer selbst freigeschaltet ist, darf die Liste ändern.'
   }
-  if (message.includes('nicht angemeldet')) return 'Bitte zuerst anmelden.'
+  if (text.includes('could not find') || text.includes('does not exist')) {
+    return 'Die Tabellen fehlen. Spiel supabase/schema.sql im SQL-Editor deines Projekts ein.'
+  }
   return 'Das hat nicht geklappt. Bitte später noch einmal versuchen.'
 }
 
@@ -571,7 +502,7 @@ export interface PullResult {
 
 export async function pullAll(
   client: SupabaseClient,
-  args: { userId: string; householdId: string | null },
+  args: { userId: string },
 ): Promise<PullResult> {
   const errors: PullResult['errors'] = []
 
@@ -593,15 +524,16 @@ export async function pullAll(
     client.from('user_prefs').select('*').eq('user_id', args.userId).limit(1),
   ])
 
-  const geteilt = args.householdId
-    ? Promise.all([
-        client.from('shop_items').select('*').eq('household_id', args.householdId),
-        client.from('pantry_items').select('*').eq('household_id', args.householdId),
-        client.from('aisle_order').select('*').eq('household_id', args.householdId),
-        client.from('notes').select('*').eq('household_id', args.householdId),
-        client.from('shop_templates').select('*').eq('household_id', args.householdId),
-      ])
-    : Promise.resolve(null)
+  // Ohne Bedingung: Wer die Zeilen sehen darf, entscheiden die Zugriffsregeln
+  // in der Datenbank. Eine Einschränkung hier wäre Zierde – umgehen ließe sie
+  // sich, und wer nicht freigeschaltet ist, bekommt ohnehin nichts.
+  const geteilt = Promise.all([
+    client.from('shop_items').select('*'),
+    client.from('pantry_items').select('*'),
+    client.from('aisle_order').select('*'),
+    client.from('notes').select('*'),
+    client.from('shop_templates').select('*'),
+  ])
 
   const [[txs, pots, potEntries, challenges, recurring, prefs], shared] = await Promise.all([privat, geteilt])
 
@@ -624,7 +556,9 @@ export async function pullAll(
     incoming.prefsUpdatedAt = prefsUpdatedAt
   }
 
-  if (shared) {
+  {
+    // Eigener Block, damit die fünf Namen nicht in den äußeren Bereich
+    // durchsickern – sie werden nur hier gebraucht.
     const [shopItems, pantryItems, aisleOrder, notes, templates] = shared
     incoming.shopItems = rows('shop_items', shopItems).map(shopFromRow)
     incoming.pantryItems = rows('pantry_items', pantryItems).map(pantryFromRow)
@@ -652,9 +586,9 @@ export async function pullAll(
 export async function pushChanges(
   client: SupabaseClient,
   state: State,
-  args: { userId: string; householdId: string | null; since: number },
+  args: { userId: string; since: number },
 ): Promise<void> {
-  const { userId, householdId, since } = args
+  const { userId, since } = args
   const neuer = <T extends { updatedAt: number }>(list: readonly T[]) => list.filter((item) => item.updatedAt > since)
 
   const jobs: PromiseLike<unknown>[] = []
@@ -672,18 +606,16 @@ export async function pushChanges(
     jobs.push(client.from('user_prefs').upsert(prefsToRow(state, userId), { onConflict: 'user_id' }))
   }
 
-  if (householdId) {
-    push('shop_items', neuer(state.shopItems).map((item) => shopToRow(item, householdId)))
-    push('pantry_items', neuer(state.pantryItems).map((item) => pantryToRow(item, householdId)))
-    push('notes', neuer(state.notes).map((note) => noteToRow(note, householdId)))
-    push('shop_templates', neuer(state.shopTemplates).map((t) => templateToRow(t, householdId)))
+  push('shop_items', neuer(state.shopItems).map(shopToRow))
+  push('pantry_items', neuer(state.pantryItems).map(pantryToRow))
+  push('notes', neuer(state.notes).map(noteToRow))
+  push('shop_templates', neuer(state.shopTemplates).map(templateToRow))
 
-    const order = Object.entries(state.aisleOrder)
-      .filter(([, rank]) => typeof rank === 'number')
-      .map(([aisle, rank]) => ({ household_id: householdId, aisle, rank, updated_at: Date.now() }))
-    if (order.length > 0) {
-      jobs.push(client.from('aisle_order').upsert(order, { onConflict: 'household_id,aisle' }))
-    }
+  const order = Object.entries(state.aisleOrder)
+    .filter(([, rank]) => typeof rank === 'number')
+    .map(([aisle, rank]) => ({ aisle, rank, updated_at: Date.now() }))
+  if (order.length > 0) {
+    jobs.push(client.from('aisle_order').upsert(order, { onConflict: 'aisle' }))
   }
 
   await Promise.all(jobs)
@@ -695,12 +627,14 @@ export async function pushChanges(
  * Auf Änderungen der geteilten Tabellen horchen.
  *
  * Damit erscheint das Häkchen der einen Person binnen Sekunden beim anderen.
- * Gibt eine Funktion zum Abmelden zurück – ohne die bleibt bei jedem Wechsel
- * des Haushalts ein Kanal offen.
+ * Gibt eine Funktion zum Abmelden zurück – ohne die bliebe bei jeder An- und
+ * Abmeldung ein Kanal offen.
+ *
+ * Ohne Filter: Es gibt nur einen geteilten Bestand. Wer davon etwas zu sehen
+ * bekommt, entscheiden die Zugriffsregeln – Realtime hält sich daran.
  */
 export function subscribeShared(
   client: SupabaseClient,
-  householdId: string,
   onChange: (incoming: Partial<State>) => void,
 ): () => void {
   // Alle vier geteilten Tabellen, nicht nur die beiden auffälligsten: Eine
@@ -714,11 +648,11 @@ export function subscribeShared(
     { table: 'shop_templates', map: (row: Row): Partial<State> => ({ shopTemplates: [templateFromRow(row)] }) },
   ]
 
-  let channel = client.channel(`haushalt:${householdId}`)
+  let channel = client.channel('geteilt')
   for (const { table, map } of tabellen) {
     channel = channel.on(
       'postgres_changes',
-      { event: '*', schema: 'public', table, filter: `household_id=eq.${householdId}` },
+      { event: '*', schema: 'public', table },
       (payload) => {
         const row = payload.new as Row | null
         if (row && row.id) onChange(map(row))

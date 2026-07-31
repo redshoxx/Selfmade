@@ -13,37 +13,31 @@ import type { Settings } from '../lib/types'
  * ist kein Schalter, sondern ein Weg über mehrere Schritte – zwischen Farbwahl
  * und Anzeigename stand er im Weg und wirkte zugleich wie eine Kleinigkeit.
  */
-export function EinstellungenSheet({ onClose, onShare }: { onClose: () => void; onShare: () => void }) {
-  const { state, dispatch, session, cloudStatus, signOut } = useApp()
+export function EinstellungenSheet({ onClose, onKonto }: { onClose: () => void; onKonto: () => void }) {
+  const { state, dispatch, session, cloudStatus, zugang } = useApp()
 
   const [name, setName] = useState(state.settings.displayName)
-  const [busy, setBusy] = useState(false)
 
   const set = (patch: Partial<Settings>) => dispatch({ type: 'settings/update', patch })
 
-  const teilenStand = !cloudConfigured
+  const kontoStand = !cloudConfigured
     ? 'läuft nur auf diesem Gerät'
     : !session
-      ? 'noch nicht angemeldet'
-      : state.household
-        ? `${state.household.name}${state.household.members.length > 1 ? ` · ${state.household.members.length} Personen` : ''}`
-        : 'noch kein Haushalt'
+      ? 'nicht angemeldet – nichts wird gesichert'
+      : zugang === false
+        ? `${session.email} · nur privat`
+        : session.email
 
   return (
     <Sheet title="Einstellungen" onClose={onClose}>
       <div className="card" style={{ marginTop: 0 }}>
-        <TapRow
-          title="Zu zweit nutzen"
-          sub={teilenStand}
-          leading={<IconUsers size={18} />}
-          onClick={onShare}
-        />
+        <TapRow title="Konto" sub={kontoStand} leading={<IconUsers size={18} />} onClick={onKonto} />
       </div>
 
       {cloudStatus === 'fehler' && (
         <div className="notice notice-warn" style={{ marginTop: 12 }}>
           <span aria-hidden="true">!</span>
-          <span>Der Abgleich hakt gerade. Unter „Zu zweit nutzen“ steht, woran es liegt.</span>
+          <span>Der Abgleich hakt gerade. Unter „Konto“ steht, woran es liegt.</span>
         </div>
       )}
 
@@ -96,29 +90,12 @@ export function EinstellungenSheet({ onClose, onShare }: { onClose: () => void; 
         </div>
       </div>
 
-      {session && (
-        <div className="btn-row">
-          <button
-            type="button"
-            className="btn btn-wide"
-            disabled={busy}
-            onClick={async () => {
-              setBusy(true)
-              try {
-                await signOut()
-              } finally {
-                setBusy(false)
-              }
-            }}
-          >
-            Abmelden ({session.email})
-          </button>
-        </div>
-      )}
+      {/* Das Abmelden steht unter „Konto“, nicht hier. Es gehört zum Konto,
+          und zweimal dieselbe Schaltfläche an zwei Stellen lädt dazu ein, sich
+          zu fragen, ob sie dasselbe tun. */}
 
       <p className="small muted" style={{ marginTop: 18, textAlign: 'center' }}>
-        Deine Daten liegen auf diesem Gerät. Was du teilst, liegt zusätzlich auf deinem eigenen
-        Supabase-Projekt – sonst nirgends.
+        Deine Daten liegen auf diesem Gerät und auf deinem eigenen Supabase-Projekt – sonst nirgends.
       </p>
     </Sheet>
   )

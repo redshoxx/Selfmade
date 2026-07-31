@@ -24,12 +24,12 @@ import type { Tab } from '../lib/types'
  */
 export function StartView({
   onGo,
-  onShare,
+  onKonto,
 }: {
   onGo: (tab: Tab, intent?: GoIntent) => void
-  onShare: () => void
+  onKonto: () => void
 }) {
-  const { state } = useApp()
+  const { state, session, zugang } = useApp()
   const month = currentMonth()
 
   const summary = useMemo(() => summarizeMonth(state, month), [state, month])
@@ -86,10 +86,10 @@ export function StartView({
             onClick={() => onGo('sparen', { challenge: true })}
           />
           <Entry
-            emoji="👥"
-            title="Zu zweit nutzen"
-            text="Einkaufsliste und Vorrat teilen. Dein Geld bleibt privat."
-            onClick={onShare}
+            emoji="☁️"
+            title="Anmelden und sichern"
+            text="Daten auf allen Geräten, Einkaufsliste und Vorrat gemeinsam."
+            onClick={onKonto}
           />
         </div>
 
@@ -163,11 +163,6 @@ export function StartView({
               </span>
               <IconChevron size={18} />
             </div>
-            {state.household && (
-              <div className="small muted" style={{ marginTop: 3 }}>
-                Geteilt mit {state.household.name}
-              </div>
-            )}
           </button>
         </>
       )}
@@ -243,13 +238,17 @@ export function StartView({
         </button>
       </div>
 
-      {!state.household && (
+      {(!session || zugang === false) && (
         <div style={{ marginTop: 12 }}>
           <Entry
-            emoji="👥"
-            title="Zu zweit nutzen"
-            text="Einkaufsliste und Vorrat teilen. Dein Geld bleibt privat."
-            onClick={onShare}
+            emoji="☁️"
+            title={session ? 'Noch nicht freigeschaltet' : 'Anmelden und sichern'}
+            text={
+              session
+                ? 'Für die gemeinsame Einkaufsliste muss dich jemand freischalten.'
+                : 'Daten auf allen Geräten, Einkaufsliste und Vorrat gemeinsam.'
+            }
+            onClick={onKonto}
           />
         </div>
       )}

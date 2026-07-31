@@ -467,12 +467,10 @@ describe('loadState', () => {
       JSON.stringify({
         pantryItems: [item],
         pots: [pot],
-        household: { id: 'h1', name: 'Zuhause', inviteCode: 'K7M-2QD', members: [{ userId: 'u1', name: 'Lea' }] },
       }),
     )
     expect(state.pantryItems[0]!.name).toBe('Milch')
     expect(state.pots[0]!.targetCents).toBe(50000)
-    expect(state.household!.members).toHaveLength(1)
   })
 })
 
