@@ -496,7 +496,10 @@ describe('hasChangesSince', () => {
   })
 
   it('erkennt eine neue Notiz', () => {
-    const state = reducer(initialState(), { type: 'note/add', note: { title: 'Rezept', body: '', pinned: false } })
+    const state = reducer(initialState(), {
+      type: 'note/add',
+      note: { title: 'Rezept', body: '', pinned: false, color: 'keine', checks: [] },
+    })
     expect(hasChangesSince(state, 0)).toBe(true)
     expect(hasChangesSince(state, Date.now() + 1000)).toBe(false)
   })
@@ -688,5 +691,144 @@ describe('Der Kreis Einkauf → Vorrat', () => {
 
     expect(state.pantryItems[0]!.qty).toBe(2)
     expect(live(state.shopItems)).toHaveLength(0)
+  })
+})
+
+describe('note/toggleCheck', () => {
+  const mitPunkten = () => {
+    const state = reducer(initialState(), {
+      type: 'note/add',
+      note: {
+        title: 'Packliste',
+        body: '',
+        pinned: false,
+        color: 'gelb',
+        checks: [
+          { id: 'c1', text: 'Zelt', done: false },
+          { id: 'c2', text: 'Schlafsack', done: false },
+        ],
+      },
+    })
+    return { state, id: state.notes[0]!.id }
+  }
+
+  it('hakt genau einen Punkt und lässt den Rest stehen', () => {
+    const { state, id } = mitPunkten()
+    const nachher = reducer(state, { type: 'note/toggleCheck', id, checkId: 'c2' })
+    expect(nachher.notes[0]!.checks.map((c) => c.done)).toEqual([false, true])
+  })
+
+  it('nimmt das Häkchen beim zweiten Mal zurück', () => {
+    const { state, id } = mitPunkten()
+    const hin = reducer(state, { type: 'note/toggleCheck', id, checkId: 'c1' })
+    const zurueck = reducer(hin, { type: 'note/toggleCheck', id, checkId: 'c1' })
+    expect(zurueck.notes[0]!.checks[0]!.done).toBe(false)
+  })
+
+  it('lässt einen unbekannten Punkt unangetastet', () => {
+    const { state, id } = mitPunkten()
+    expect(reducer(state, { type: 'note/toggleCheck', id, checkId: 'gibtsnicht' })).toBe(state)
+  })
+})
+
+describe('sparen/zuruecklegen', () => {
+  it('legt ohne vorhandenen Topf einen an und bucht hinein', () => {
+    // Die Kennung des Topfes fällt erst im Reducer an – die Ansicht kann sie
+    // nicht mitgeben. Deshalb muss beides in einem Zug passieren.
+    const state = reducer(initialState(), { type: 'sparen/zuruecklegen', cents: 5000, potId: null })
+    expect(live(state.pots)).toHaveLength(1)
+    expect(live(state.potEntries)).toHaveLength(1)
+    expect(state.potEntries[0]!.potId).toBe(state.pots[0]!.id)
+    expect(state.potEntries[0]!.cents).toBe(5000)
+  })
+
+  it('bucht in den genannten Topf, ohne einen zweiten anzulegen', () => {
+    const mitTopf = reducer(initialState(), {
+      type: 'pot/add',
+      pot: { name: 'Urlaub', emoji: '🏖', targetCents: null, targetDate: null },
+    })
+    const potId = mitTopf.pots[0]!.id
+    const state = reducer(mitTopf, { type: 'sparen/zuruecklegen', cents: 2500, potId })
+    expect(live(state.pots)).toHaveLength(1)
+    expect(state.potEntries[0]!.potId).toBe(potId)
+  })
+
+  it('bucht in einen neuen Topf, wenn der genannte inzwischen gelöscht ist', () => {
+    // Kann passieren, während das Blatt offen steht und auf dem anderen Gerät
+    // gelöscht wird. Den Betrag deswegen zu verwerfen wäre der schlechtere
+    // Ausgang.
+    const mitTopf = reducer(initialState(), {
+      type: 'pot/add',
+      pot: { name: 'Urlaub', emoji: '🏖', targetCents: null, targetDate: null },
+    })
+    const potId = mitTopf.pots[0]!.id
+    const ohne = reducer(mitTopf, { type: 'pot/remove', id: potId })
+    const state = reducer(ohne, { type: 'sparen/zuruecklegen', cents: 2500, potId })
+    expect(live(state.pots)).toHaveLength(1)
+    expect(live(state.potEntries)).toHaveLength(1)
+    expect(state.potEntries[0]!.potId).not.toBe(potId)
+  })
+
+  it('lehnt Beträge ab, die keine sind', () => {
+    const start = initialState()
+    expect(reducer(start, { type: 'sparen/zuruecklegen', cents: 0, potId: null })).toBe(start)
+    expect(reducer(start, { type: 'sparen/zuruecklegen', cents: -100, potId: null })).toBe(start)
+  })
+})
+
+describe('Umzug von „sparen“ nach „geld“', () => {
+  it('bildet eine gespeicherte Startseite „sparen“ auf „geld“ ab', () => {
+    // `sparen` war ein eigener Reiter. Auf `start` zurückzufallen wäre die
+    // bequemere, aber falsche Antwort – der Bereich ist nicht weg, er ist
+    // umgezogen.
+    const state = loadState(JSON.stringify({ settings: { startTab: 'sparen' } }))
+    expect(state.settings.startTab).toBe('geld')
+  })
+
+  it('ergänzt bei alten Notizen Farbe und Häkchen', () => {
+    const state = loadState(
+      JSON.stringify({
+        notes: [{ id: 'n1', title: 'Rezept', body: 'Mehl', updatedAt: 5, deletedAt: null }],
+      }),
+    )
+    expect(state.notes[0]!.color).toBe('keine')
+    expect(state.notes[0]!.checks).toEqual([])
+  })
+
+  it('behält eine Notiz, die nur aus Häkchen besteht', () => {
+    const state = loadState(
+      JSON.stringify({
+        notes: [
+          {
+            id: 'n1',
+            title: '',
+            body: '',
+            checks: [{ id: 'c1', text: 'Zelt', done: false }],
+            updatedAt: 5,
+            deletedAt: null,
+          },
+        ],
+      }),
+    )
+    expect(state.notes).toHaveLength(1)
+    expect(state.notes[0]!.checks[0]!.text).toBe('Zelt')
+  })
+
+  it('wirft kaputte Häkchen weg, statt die Notiz zu verlieren', () => {
+    const state = loadState(
+      JSON.stringify({
+        notes: [
+          {
+            id: 'n1',
+            title: 'Packliste',
+            body: '',
+            checks: [null, { text: '' }, { id: 'c2', text: 'Zelt', done: true }, 7],
+            updatedAt: 5,
+            deletedAt: null,
+          },
+        ],
+      }),
+    )
+    expect(state.notes[0]!.checks).toEqual([{ id: 'c2', text: 'Zelt', done: true }])
   })
 })

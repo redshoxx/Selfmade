@@ -59,7 +59,11 @@ export function groupForShopping(
       if (a.done !== b.done) return a.done ? 1 : -1
       return a.name.localeCompare(b.name, 'de')
     })
-    groups.push({ aisle: aisle(id), items, openCount: items.filter((i) => !i.done).length })
+    groups.push({
+      aisle: aisle(id),
+      items,
+      openCount: items.filter((i) => !i.done).length,
+    })
   }
 
   return groups.sort((a, b) => aisleRank(state, a.aisle.id) - aisleRank(state, b.aisle.id))
@@ -137,7 +141,11 @@ export function suggestions(state: Pick<State, 'shopItems'>, query: string, limi
       seen.count++
       seen.last = Math.max(seen.last, item.updatedAt)
     } else {
-      counts.set(key, { name: item.name.trim(), count: 1, last: item.updatedAt })
+      counts.set(key, {
+        name: item.name.trim(),
+        count: 1,
+        last: item.updatedAt,
+      })
     }
   }
 
@@ -204,8 +212,9 @@ export function vorratsZugaenge(
     // Erst über die Kennung, dann über den Namen. Der zweite Weg fängt den
     // Fall, dass jemand „Milch“ von Hand aufgeschrieben hat, obwohl sie im
     // Vorrat steht – sonst entstünde ein zweiter Posten desselben Produkts.
-    const treffer = (item.pantryId ? imVorrat.get(item.pantryId) : undefined)
-      ?? nachName.get(item.name.trim().toLowerCase())
+    const treffer =
+      (item.pantryId ? imVorrat.get(item.pantryId) : undefined) ??
+      nachName.get(item.name.trim().toLowerCase())
 
     if (treffer) hochzaehlen.push({ pantryId: treffer.id, menge })
     else {
@@ -234,14 +243,24 @@ export function vorratsZugaenge(
  * Grabsteine liegen, mit Name, Menge und Zeitpunkt. Es braucht auch kein
  * Wegklicken – der Streifen räumt sich von selbst ab. Wer das Produkt
  * übernimmt, dessen Name findet danach einen Vorratsposten und fällt heraus;
- * alles andere fällt nach `tage` heraus.
+ * alles andere fällt nach `fensterMs` heraus.
+ *
+ * Zwei Stunden, weil das die Spanne zwischen Kasse und Auspacken ist. Länger
+ * gedacht klingt großzügig, ist es aber nicht: Was am Abend noch dasteht, hat
+ * man bewusst nicht übernommen, und es dann am nächsten Morgen wieder
+ * angeboten zu bekommen, macht aus einem Angebot eine Aufgabe.
+ *
+ * Verloren geht dabei nichts – der Grabstein bleibt liegen, er wird nur nicht
+ * mehr vorgeschlagen.
  */
+export const FRISCH_FENSTER_MS = 2 * 60 * 60 * 1000
+
 export function neuGekauft(
   state: Pick<State, 'shopItems' | 'pantryItems'>,
   jetzt: number = Date.now(),
-  tage = 3,
+  fensterMs: number = FRISCH_FENSTER_MS,
 ): NeuGekauft[] {
-  const grenze = jetzt - tage * 24 * 60 * 60 * 1000
+  const grenze = jetzt - fensterMs
   const imVorrat = new Set(live(state.pantryItems).map((i) => i.name.trim().toLowerCase()))
 
   // Je Name nur der jüngste Kauf: Zwei Wochen hintereinander Milch ergäbe

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { AmountField, Bar, Empty, Field, TapRow } from '../components/Bits'
+import { AmountField, Bar, Field, TapRow } from '../components/Bits'
 import { IconChevron, IconPlus, IconTrash } from '../components/Icons'
 import { Sheet } from '../components/Sheet'
 import {
@@ -23,14 +23,25 @@ import { useApp } from '../lib/useApp'
 import type { Challenge, Pot } from '../lib/types'
 
 /**
- * Sparen: Töpfe und Challenges.
+ * Sparen.
  *
- * Eine Challenge ohne Spartopf wäre ein Spiel ohne Punktestand – deshalb legt
- * die App beim Anlegen gleich einen Topf mit an. Jedes Häkchen bewegt dann
- * echtes Geld, und der Fortschritt steht nicht nur im Raster, sondern auch im
- * Sparstand.
+ * Der ganze Bereich ist auf einen Handgriff zugeschnitten: Geld zurücklegen.
+ * Ein großer Betrag, ein Knopf darunter, fertig. Alles Weitere ordnet sich dem
+ * unter.
+ *
+ * Die Spartöpfe treten dafür in den Hintergrund. Sie waren nie das Ziel,
+ * sondern die Buchhaltung dahinter – und wer nur einen hat, hat gar keine
+ * Wahl zu treffen und soll auch keine vorgesetzt bekommen. Erst ab dem zweiten
+ * Topf gibt es etwas auszuwählen, und erst dann steht die Liste da.
+ *
+ * Die Challenges bleiben, wie sie waren: Eine Challenge ohne Topf wäre ein
+ * Spiel ohne Punktestand, deshalb legt die App beim Start einen mit an. Jedes
+ * Häkchen bewegt echtes Geld.
+ *
+ * Kein eigener Reiter mehr, sondern ein Bereich in `GeldView`: Auf einem
+ * iPhone 12 sind fünf Reiter die Grenze, und Sparen gehört zum Geld.
  */
-export function SparenView({ startPicking }: { startPicking?: boolean }) {
+export function SparenBereich({ startPicking }: { startPicking?: boolean }) {
   const { state } = useApp()
   const [openChallenge, setOpenChallenge] = useState<Challenge | null>(null)
   const [openPot, setOpenPot] = useState<Pot | null>(null)
@@ -38,6 +49,7 @@ export function SparenView({ startPicking }: { startPicking?: boolean }) {
   // offen – sonst wäre der Weg dorthin zwei Tipps lang statt einem.
   const [picking, setPicking] = useState(Boolean(startPicking))
   const [creatingPot, setCreatingPot] = useState(false)
+  const [zurueckLegen, setZurueckLegen] = useState(false)
 
   const challenges = useMemo(
     () => live(state.challenges).filter((c) => !c.archived),
@@ -48,24 +60,24 @@ export function SparenView({ startPicking }: { startPicking?: boolean }) {
 
   return (
     <>
-      <div className="scroll">
-        <div className="head">
-          <h1>Sparen</h1>
+      <div className="card pad" style={{ marginBottom: 12 }}>
+        <div className="tile-label">Insgesamt gespart</div>
+        <div className="big-money">{formatMoney(gesamt)}</div>
+        <div className="btn-row">
+          <button
+            type="button"
+            className="btn btn-primary btn-wide"
+            onClick={() => setZurueckLegen(true)}
+          >
+            <IconPlus size={18} />
+            Zurücklegen
+          </button>
         </div>
+      </div>
 
-        <div className="card pad" style={{ marginBottom: 12 }}>
-          <div className="tile-label">Insgesamt gespart</div>
-          <div className="big-money">{formatMoney(gesamt)}</div>
-        </div>
-
-        <h2 className="section">Challenges</h2>
-        {challenges.length === 0 ? (
-          <Empty
-            emoji="🎯"
-            title="Noch keine Challenge"
-            text="Such dir eine aus – die 1-€-Challenge bringt in einem Jahr 1.378 € zusammen."
-          />
-        ) : (
+      {challenges.length > 0 && (
+        <>
+          <h2 className="section">Challenges</h2>
           <div className="stack">
             {challenges.map((challenge) => (
               <ChallengeCard
@@ -75,21 +87,29 @@ export function SparenView({ startPicking }: { startPicking?: boolean }) {
               />
             ))}
           </div>
-        )}
+        </>
+      )}
 
-        <div className="btn-row">
-          <button type="button" className="btn btn-primary btn-wide" onClick={() => setPicking(true)}>
-            <IconPlus size={18} />
-            Challenge starten
-          </button>
-        </div>
+      <div className="btn-row">
+        <button type="button" className="btn btn-wide" onClick={() => setPicking(true)}>
+          <IconPlus size={18} />
+          {challenges.length > 0 ? 'Weitere Challenge' : 'Challenge starten'}
+        </button>
+      </div>
 
-        <h2 className="section">Spartöpfe</h2>
-        {pots.length === 0 ? (
-          <p className="small muted" style={{ padding: '0 2px 8px' }}>
-            Noch kein Topf. Beim Start einer Challenge legt die App einen an.
-          </p>
-        ) : (
+      {challenges.length === 0 && (
+        <p className="small muted" style={{ margin: '10px 2px 0', textAlign: 'center' }}>
+          Eine Challenge macht aus dem Sparen ein Spiel: Die 1-€-Challenge bringt in einem Jahr
+          1.378 € zusammen.
+        </p>
+      )}
+
+      {/* Erst ab dem zweiten Topf gibt es etwas zu wählen. Wer einen hat,
+          sieht oben seinen Stand – eine Liste mit einer Zeile darunter wäre
+          nur eine Wiederholung. */}
+      {pots.length > 1 && (
+        <>
+          <h2 className="section">Töpfe</h2>
           <div className="card">
             {pots.map((status) => (
               <TapRow
@@ -110,16 +130,45 @@ export function SparenView({ startPicking }: { startPicking?: boolean }) {
               />
             ))}
           </div>
-        )}
+        </>
+      )}
 
-        <div className="btn-row">
+      <details style={{ marginTop: 14 }}>
+        <summary className="small muted">
+          {pots.length === 1 ? `Topf „${pots[0]!.pot.name}“ bearbeiten` : 'Töpfe verwalten'}
+        </summary>
+        <div style={{ paddingTop: 4 }}>
+          {pots.length === 1 && (
+            <div className="card" style={{ marginBottom: 10 }}>
+              <TapRow
+                title={pots[0]!.pot.name}
+                sub={
+                  pots[0]!.pot.targetCents
+                    ? `${pots[0]!.progress} % von ${formatShort(pots[0]!.pot.targetCents!)}`
+                    : 'ohne festes Ziel'
+                }
+                leading={
+                  <span style={{ fontSize: 20 }} aria-hidden="true">
+                    {pots[0]!.pot.emoji}
+                  </span>
+                }
+                value={formatMoney(pots[0]!.savedCents)}
+                onClick={() => setOpenPot(pots[0]!.pot)}
+              />
+            </div>
+          )}
           <button type="button" className="btn btn-wide" onClick={() => setCreatingPot(true)}>
             <IconPlus size={18} />
-            Spartopf anlegen
+            Eigenen Topf anlegen
           </button>
+          <p className="small muted" style={{ marginTop: 10 }}>
+            Ein Topf ist ein Ziel, für das du getrennt sammelst – Urlaub, Führerschein. Wer nur
+            spart, braucht keinen: „Zurücklegen“ legt beim ersten Mal selbst einen an.
+          </p>
         </div>
-      </div>
+      </details>
 
+      {zurueckLegen && <ZurueckLegenSheet onClose={() => setZurueckLegen(false)} />}
       {picking && <TemplateSheet onClose={() => setPicking(false)} />}
       {openChallenge && (
         <ChallengeSheet challenge={openChallenge} onClose={() => setOpenChallenge(null)} />
@@ -127,6 +176,72 @@ export function SparenView({ startPicking }: { startPicking?: boolean }) {
       {creatingPot && <PotSheet onClose={() => setCreatingPot(false)} />}
       {openPot && <PotSheet pot={openPot} onClose={() => setOpenPot(null)} />}
     </>
+  )
+}
+
+/* --- Zurücklegen ----------------------------------------------------------- */
+
+/**
+ * Der eine Handgriff.
+ *
+ * Betrag eintippen, fertig. Die Topfwahl erscheint nur, wenn es mehr als einen
+ * gibt – und gar keinen zu haben ist kein Hindernis: Dann legt der Reducer im
+ * selben Zug einen an.
+ */
+function ZurueckLegenSheet({ onClose }: { onClose: () => void }) {
+  const { state, dispatch } = useApp()
+  const pots = useMemo(() => allPotStatus(state), [state])
+  const [cents, setCents] = useState<number | null>(null)
+  const [potId, setPotId] = useState<string | null>(pots[0]?.pot.id ?? null)
+
+  const canSave = cents !== null && cents > 0
+
+  const save = () => {
+    if (!canSave) return
+    dispatch({ type: 'sparen/zuruecklegen', cents: cents!, potId })
+    onClose()
+  }
+
+  return (
+    <Sheet title="Zurücklegen" onClose={onClose}>
+      <AmountField cents={cents} onChange={setCents} autoFocus label="Betrag" />
+
+      {pots.length > 1 && (
+        <>
+          <span className="field-label">Wohin</span>
+          <div className="chips">
+            {pots.map((status) => (
+              <button
+                key={status.pot.id}
+                type="button"
+                className={`chip${potId === status.pot.id ? ' chip-on' : ''}`}
+                onClick={() => setPotId(status.pot.id)}
+              >
+                <span aria-hidden="true">{status.pot.emoji}</span>
+                {status.pot.name}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      <div className="btn-row">
+        <button
+          type="button"
+          className="btn btn-primary btn-wide"
+          onClick={save}
+          disabled={!canSave}
+        >
+          Zurücklegen
+        </button>
+      </div>
+
+      {pots.length === 0 && (
+        <p className="small muted" style={{ marginTop: 12 }}>
+          Die App legt dafür einen Spartopf „Sparen“ an. Umbenennen kannst du ihn jederzeit.
+        </p>
+      )}
+    </Sheet>
   )
 }
 
@@ -139,7 +254,12 @@ function ChallengeCard({ challenge, onOpen }: { challenge: Challenge; onOpen: ()
   const fertig = isComplete(challenge)
 
   return (
-    <button type="button" className="card pad" onClick={onOpen} style={{ textAlign: 'left', width: '100%' }}>
+    <button
+      type="button"
+      className="card pad"
+      onClick={onOpen}
+      style={{ textAlign: 'left', width: '100%' }}
+    >
       <div className="spread">
         <span style={{ fontWeight: 600 }}>{challenge.name}</span>
         <IconChevron size={18} />
@@ -151,7 +271,10 @@ function ChallengeCard({ challenge, onOpen }: { challenge: Challenge; onOpen: ()
         <span className="small muted">von {formatShort(total)}</span>
       </div>
       <div style={{ marginTop: 9 }}>
-        <Bar percent={progress(challenge)} tone={fertig ? 'good' : status.onTrack ? undefined : 'warn'} />
+        <Bar
+          percent={progress(challenge)}
+          tone={fertig ? 'good' : status.onTrack ? undefined : 'warn'}
+        />
       </div>
       <div className="small muted" style={{ marginTop: 6 }}>
         {fertig ? (
@@ -251,15 +374,18 @@ function CustomChallengeSheet({ onClose, onBack }: { onClose: () => void; onBack
   const slotsValid = Number.isInteger(parsedSlots) && parsedSlots > 0 && parsedSlots <= 400
   const canSave = name.trim() !== '' && stepCents !== null && stepCents > 0 && slotsValid
 
-  const vorschau = canSave
-    ? totalCents({ kind, stepCents: stepCents!, slots: parsedSlots })
-    : 0
+  const vorschau = canSave ? totalCents({ kind, stepCents: stepCents!, slots: parsedSlots }) : 0
 
   const save = () => {
     if (!canSave) return
     dispatch({
       type: 'challenge/start',
-      pot: { name: name.trim(), emoji: '🎯', targetCents: vorschau, targetDate: null },
+      pot: {
+        name: name.trim(),
+        emoji: '🎯',
+        targetCents: vorschau,
+        targetDate: null,
+      },
       challenge: {
         name: name.trim(),
         kind,
@@ -292,7 +418,11 @@ function CustomChallengeSheet({ onClose, onBack }: { onClose: () => void; onBack
           />
         </Field>
         <Field label="Rhythmus">
-          <select className="select" value={unit} onChange={(e) => setUnit(e.target.value as Challenge['unit'])}>
+          <select
+            className="select"
+            value={unit}
+            onChange={(e) => setUnit(e.target.value as Challenge['unit'])}
+          >
             <option value="tag">täglich</option>
             <option value="woche">wöchentlich</option>
             <option value="monat">monatlich</option>
@@ -302,7 +432,11 @@ function CustomChallengeSheet({ onClose, onBack }: { onClose: () => void; onBack
 
       <span className="field-label">Art</span>
       <div className="segmented" style={{ marginBottom: 16 }}>
-        <button type="button" aria-pressed={kind === 'steigend'} onClick={() => setKind('steigend')}>
+        <button
+          type="button"
+          aria-pressed={kind === 'steigend'}
+          onClick={() => setKind('steigend')}
+        >
           Steigend
         </button>
         <button type="button" aria-pressed={kind === 'gleich'} onClick={() => setKind('gleich')}>
@@ -321,7 +455,12 @@ function CustomChallengeSheet({ onClose, onBack }: { onClose: () => void; onBack
       )}
 
       <div className="btn-row">
-        <button type="button" className="btn btn-primary btn-wide" onClick={save} disabled={!canSave}>
+        <button
+          type="button"
+          className="btn btn-primary btn-wide"
+          onClick={save}
+          disabled={!canSave}
+        >
           Starten
         </button>
       </div>
@@ -354,7 +493,13 @@ function ChallengeSheet({ challenge, onClose }: { challenge: Challenge; onClose:
             onClose()
           }}
           aria-label="Löschen"
-          style={{ width: 40, height: 40, display: 'grid', placeItems: 'center', color: 'var(--bad)' }}
+          style={{
+            width: 40,
+            height: 40,
+            display: 'grid',
+            placeItems: 'center',
+            color: 'var(--bad)',
+          }}
         >
           <IconTrash />
         </button>
@@ -419,7 +564,7 @@ function shortAmount(cents: number): string {
 
 function PotSheet({ pot, onClose }: { pot?: Pot; onClose: () => void }) {
   const { state, dispatch } = useApp()
-  const current = pot ? live(state.pots).find((p) => p.id === pot.id) ?? pot : undefined
+  const current = pot ? (live(state.pots).find((p) => p.id === pot.id) ?? pot) : undefined
 
   const [name, setName] = useState(current?.name ?? '')
   const [emoji, setEmoji] = useState(current?.emoji ?? '🎯')
@@ -467,7 +612,13 @@ function PotSheet({ pot, onClose }: { pot?: Pot; onClose: () => void }) {
               onClose()
             }}
             aria-label="Löschen"
-            style={{ width: 40, height: 40, display: 'grid', placeItems: 'center', color: 'var(--bad)' }}
+            style={{
+              width: 40,
+              height: 40,
+              display: 'grid',
+              placeItems: 'center',
+              color: 'var(--bad)',
+            }}
           >
             <IconTrash />
           </button>
@@ -482,10 +633,16 @@ function PotSheet({ pot, onClose }: { pot?: Pot; onClose: () => void }) {
               <span className="small muted">noch {formatMoney(status.remainingCents)}</span>
             )}
           </div>
-          {current?.targetCents && <Bar percent={status.progress} tone={status.reached ? 'good' : undefined} />}
+          {current?.targetCents && (
+            <Bar percent={status.progress} tone={status.reached ? 'good' : undefined} />
+          )}
 
           <div style={{ marginTop: 16 }}>
-            <AmountField cents={depositCents} onChange={setDepositCents} label="Ein- oder auszahlen" />
+            <AmountField
+              cents={depositCents}
+              onChange={setDepositCents}
+              label="Ein- oder auszahlen"
+            />
             <div className="btn-row" style={{ marginTop: 0 }}>
               <button
                 type="button"
@@ -520,7 +677,11 @@ function PotSheet({ pot, onClose }: { pot?: Pot; onClose: () => void }) {
         </Field>
         <div style={{ flex: 3 }}>
           <Field label="Name">
-            <input className="input" value={name} onChange={(event) => setName(event.target.value)} />
+            <input
+              className="input"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+            />
           </Field>
         </div>
       </div>
@@ -528,7 +689,12 @@ function PotSheet({ pot, onClose }: { pot?: Pot; onClose: () => void }) {
       <AmountField cents={targetCents} onChange={setTargetCents} label="Ziel (freiwillig)" />
 
       <div className="btn-row">
-        <button type="button" className="btn btn-primary btn-wide" onClick={save} disabled={!canSave}>
+        <button
+          type="button"
+          className="btn btn-primary btn-wide"
+          onClick={save}
+          disabled={!canSave}
+        >
           Speichern
         </button>
       </div>

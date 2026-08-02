@@ -1,12 +1,20 @@
 /**
  * Symbole als Strichzeichnungen.
  *
- * Selbst gezeichnet statt aus einer Bibliothek: Es sind acht Stück, und eine
- * Symbolbibliothek wiegt mehr als die halbe App.
+ * Selbst gezeichnet statt aus einer Bibliothek: Es sind ein Dutzend Stück, und
+ * eine Symbolbibliothek wiegt mehr als die halbe App.
+ *
+ * Die fünf Symbole der Reiterleiste können zusätzlich *gefüllt*. Das ist keine
+ * Spielerei: In der Leiste unterschied bisher allein die Farbe den aktiven
+ * Reiter, und Farbe allein trägt zu wenig – bei hellem Sonnenlicht, bei
+ * eingeschränktem Farbsehen, im Vorbeigehen. Gefüllt gegen Umriss ist ein
+ * Unterschied in der Form, und iOS macht es mit seinen Symbolen genauso.
  */
 
 interface Props {
   size?: number
+  /** Nur die fünf Reiter-Symbole werten das aus. */
+  filled?: boolean
 }
 
 const base = (size: number) => ({
@@ -21,7 +29,24 @@ const base = (size: number) => ({
   'aria-hidden': true,
 })
 
-export function IconHome({ size = 22 }: Props) {
+/** Gefüllt heißt: Fläche in der Textfarbe, kein zusätzlicher Umriss. */
+const voll = (size: number) => ({
+  width: size,
+  height: size,
+  viewBox: '0 0 24 24',
+  fill: 'currentColor',
+  stroke: 'none',
+  'aria-hidden': true,
+})
+
+export function IconHome({ size = 22, filled }: Props) {
+  if (filled) {
+    return (
+      <svg {...voll(size)}>
+        <path d="M11.36 2.65a1 1 0 0 1 1.28 0l8.5 7.1A1 1 0 0 1 21.5 11H20v9a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1v-9H2.5a1 1 0 0 1-.64-1.77Z" />
+      </svg>
+    )
+  }
   return (
     <svg {...base(size)}>
       <path d="M3 10.5 12 3l9 7.5" />
@@ -30,7 +55,14 @@ export function IconHome({ size = 22 }: Props) {
   )
 }
 
-export function IconWallet({ size = 22 }: Props) {
+export function IconWallet({ size = 22, filled }: Props) {
+  if (filled) {
+    return (
+      <svg {...voll(size)}>
+        <path d="M6 5h12a3 3 0 0 1 3 3v1H3V8a3 3 0 0 1 3-3Zm-3 6h18v5a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3Zm14 4.7a1.3 1.3 0 1 0 0-2.6 1.3 1.3 0 0 0 0 2.6Z" />
+      </svg>
+    )
+  }
   return (
     <svg {...base(size)}>
       <rect x="3" y="6" width="18" height="13" rx="3" />
@@ -50,7 +82,16 @@ export function IconTarget({ size = 22 }: Props) {
   )
 }
 
-export function IconCart({ size = 22 }: Props) {
+export function IconCart({ size = 22, filled }: Props) {
+  if (filled) {
+    return (
+      <svg {...voll(size)}>
+        <path d="M1.6 3.4a1 1 0 0 1 1-1h2.2a1 1 0 0 1 .98.8l.34 1.7h14.4a1 1 0 0 1 .96 1.26l-1.9 7a1 1 0 0 1-.96.74H8.1l.3 1.5h9.8a1 1 0 1 1 0 2H7.6a1 1 0 0 1-.98-.8L3.98 4.4H2.6a1 1 0 0 1-1-1Z" />
+        <circle cx="9" cy="20" r="1.7" />
+        <circle cx="17.5" cy="20" r="1.7" />
+      </svg>
+    )
+  }
   return (
     <svg {...base(size)}>
       <path d="M2.5 3.5h2.2l2.2 11h10.4" />
@@ -61,12 +102,45 @@ export function IconCart({ size = 22 }: Props) {
   )
 }
 
-export function IconFridge({ size = 22 }: Props) {
+export function IconFridge({ size = 22, filled }: Props) {
+  if (filled) {
+    return (
+      <svg {...voll(size)}>
+        <path d="M8 2.5h8a3 3 0 0 1 3 3V9H5V5.5a3 3 0 0 1 3-3Zm-1 3.3v2h1.6v-2Zm-2 5.2h14v7a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3Zm2 1.8v2.6h1.6V12.8Z" />
+      </svg>
+    )
+  }
   return (
     <svg {...base(size)}>
       <rect x="5" y="2.5" width="14" height="19" rx="3" />
       <path d="M5 10h14" />
       <path d="M8.5 6v1.8M8.5 13v2.4" />
+    </svg>
+  )
+}
+
+export function IconNote({ size = 22, filled }: Props) {
+  if (filled) {
+    return (
+      <svg {...voll(size)}>
+        <path d="M6 2.5h12a2.5 2.5 0 0 1 2.5 2.5v14a2.5 2.5 0 0 1-2.5 2.5H6A2.5 2.5 0 0 1 3.5 19V5A2.5 2.5 0 0 1 6 2.5Zm1.6 5.3a.9.9 0 0 0 0 1.8h8.8a.9.9 0 0 0 0-1.8Zm0 4a.9.9 0 0 0 0 1.8h8.8a.9.9 0 0 0 0-1.8Zm0 4a.9.9 0 0 0 0 1.8h5a.9.9 0 0 0 0-1.8Z" />
+      </svg>
+    )
+  }
+  return (
+    <svg {...base(size)}>
+      <rect x="4" y="2.8" width="16" height="18.4" rx="3" />
+      <path d="M8 8.5h8M8 12.5h8M8 16.5h5" />
+    </svg>
+  )
+}
+
+/** Vorlagen: ein Blatt mit Häkchen davor. */
+export function IconTemplate({ size = 20 }: Props) {
+  return (
+    <svg {...base(size)}>
+      <path d="M5 4.5h14a1.5 1.5 0 0 1 1.5 1.5v13a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 19V6A1.5 1.5 0 0 1 5 4.5Z" />
+      <path d="M7 9.5l1.5 1.5L11 8.5M14 10h4M7 15.5l1.5 1.5L11 14.5M14 16h4" />
     </svg>
   )
 }

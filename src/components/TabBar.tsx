@@ -1,5 +1,19 @@
 import type { Tab } from '../lib/types'
-import { IconCart, IconFridge, IconHome, IconTarget, IconWallet } from './Icons'
+import { IconCart, IconFridge, IconHome, IconNote, IconWallet } from './Icons'
+
+/**
+ * Die Reiterleiste.
+ *
+ * Gebaut für ein iPhone, das die App vom Home-Bildschirm startet. Dort ist sie
+ * das Einzige, was ständig sichtbar ist – und das Erste, woran man merkt, ob
+ * etwas eine App ist oder eine Webseite in einem Rahmen. Drei Dinge machen den
+ * Unterschied, und alle drei stehen im Stylesheet unter `.tabbar`: die
+ * Haarlinie oben, der durchscheinende Untergrund und dass beim Langdrücken
+ * kein Auswahlmenü aufgeht.
+ *
+ * Hier drin steckt der vierte: Der aktive Reiter ist nicht nur eingefärbt,
+ * sondern *gefüllt*. Farbe allein ist ein schwaches Signal.
+ */
 
 interface Props {
   active: Tab
@@ -10,9 +24,9 @@ interface Props {
 const TABS: { id: Tab; label: string; Icon: typeof IconHome }[] = [
   { id: 'start', label: 'Start', Icon: IconHome },
   { id: 'geld', label: 'Geld', Icon: IconWallet },
-  { id: 'sparen', label: 'Sparen', Icon: IconTarget },
   { id: 'einkauf', label: 'Einkauf', Icon: IconCart },
   { id: 'vorrat', label: 'Vorrat', Icon: IconFridge },
+  { id: 'notizen', label: 'Notizen', Icon: IconNote },
 ]
 
 export function TabBar({ active, counts, onChange }: Props) {
@@ -21,23 +35,22 @@ export function TabBar({ active, counts, onChange }: Props) {
       {TABS.map(({ id, label, Icon }) => {
         const badge = counts[id]
         const showBadge = badge !== undefined && badge.value > 0
+        const on = active === id
         return (
           <button
             key={id}
             type="button"
-            className={`tab${active === id ? ' tab-on' : ''}`}
+            className={`tab${on ? ' tab-on' : ''}`}
             onClick={() => onChange(id)}
-            aria-current={active === id ? 'page' : undefined}
+            aria-current={on ? 'page' : undefined}
             /* Ohne eigenen Namen läse eine Vorlesehilfe die nackte Zahl mit
                vor – „4 Einkauf“. Hier steht, was die Zahl bedeutet. */
             aria-label={
-              showBadge
-                ? `${label}, ${badge.value} ${badge.urgent ? 'dringend' : 'offen'}`
-                : label
+              showBadge ? `${label}, ${badge.value} ${badge.urgent ? 'dringend' : 'offen'}` : label
             }
           >
             <span className="tab-icon">
-              <Icon size={22} />
+              <Icon size={25} filled={on} />
               {showBadge && (
                 <span
                   className={`tab-badge${badge.urgent ? '' : ' tab-badge-soft'}`}

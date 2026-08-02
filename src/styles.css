@@ -1,10 +1,17 @@
 /* ===========================================================================
    Selfmade – ruhige Oberfläche, alles Wichtige in Daumenreichweite.
 
-   Zwei Regeln ziehen sich durch:
-   1. Was man täglich braucht, liegt unten – dort reicht der Daumen hin.
-   2. Zahlen stehen groß und ohne Zierrat. Wer wissen will, was der Monat
+   Drei Regeln ziehen sich durch:
+   1. Jeder Bildschirm hat denselben Bau: Kopf, Inhalt, Reiterleiste. Man
+      findet sich zurecht, ohne hinzusehen.
+   2. Was man täglich braucht, liegt unten – dort reicht der Daumen hin.
+   3. Zahlen stehen groß und ohne Zierrat. Wer wissen will, was der Monat
       gekostet hat, soll nicht erst suchen müssen.
+
+   Flächen sind flach: Karte auf Grund, getrennt durch eine Linie, nicht durch
+   einen Schatten. Schatten suggerieren, dass etwas schwebt und sich schieben
+   ließe – hier lässt sich nichts schieben. Auf einem OLED-Bildschirm ist eine
+   Linie außerdem schlicht sauberer als ein Verlauf ins Schwarze.
    =========================================================================== */
 
 :root {
@@ -55,8 +62,8 @@
   --d-bad-soft: rgba(255, 98, 89, 0.15);
   --d-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.35);
 
-  --radius: 16px;
-  --radius-sm: 11px;
+  --radius: 18px;
+  --radius-sm: 12px;
   /* Notch, Home-Indikator und abgerundete Ecken. Ohne diese Abstände klebt der
      Inhalt auf dem iPhone an den Kanten und liegt unter der Statusleiste. */
   --safe-t: env(safe-area-inset-top, 0px);
@@ -67,7 +74,10 @@
   --keyboard: 0px;
   /* Kleinste angenehme Berührungsfläche. Weniger trifft man im Gehen nicht. */
   --touch: 44px;
-  --tabbar-h: 56px;
+  /* 49 Punkte plus Home-Indikator – das Maß, das iOS selbst benutzt. Vorher
+     56, und damit saß die Leiste sichtbar tiefer als in jeder anderen App auf
+     dem Gerät. */
+  --tabbar-h: 49px;
   color-scheme: light dark;
 }
 
@@ -283,30 +293,75 @@ button {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
-  padding: calc(var(--safe-t) + 12px) 16px 24px;
+  /* Der Abstand nach oben liegt jetzt im Kopf, nicht mehr hier. */
+  padding: 4px 16px 28px;
 }
 
-.head {
+/* --- Der Kopf jeder Ansicht ----------------------------------------------- */
+
+/*
+ * Eine Zeile, in der oben rechts etwas stehen darf – und die weiß, was sie
+ * trägt. Vorher schwebte das Zahnrad über allem und die Titelzeile hielt mit
+ * `padding-right: 42px` dagegen; auf Vorrat und Notizen reichte das nicht und
+ * die Schaltfläche dort lag darunter.
+ */
+.kopf {
+  flex: none;
+  position: relative;
+  z-index: 5;
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 14px;
-  /* Rechts sitzt das fest verankerte Zahnrad. Ohne diesen Streifen schiebt
-     sich der Monatswechsel darunter und ist nicht mehr zu treffen. */
-  padding-right: 42px;
+  align-items: center;
+  gap: 10px;
+  padding: calc(var(--safe-t) + 10px) 16px 10px;
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
 }
 
-.head h1 {
-  font-size: 26px;
+.kopf-titel {
+  font-size: 27px;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.025em;
   margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.head-sub {
+.kopf-beiwerk {
   color: var(--text-2);
   font-size: 14px;
+  min-width: 0;
+}
+
+.kopf-aktionen {
+  flex: none;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.kopf-knopf {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--text-2);
+  transition: transform 0.08s;
+}
+
+.kopf-knopf-akzent {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.kopf-knopf:active {
+  transform: scale(0.92);
 }
 
 h2.section {
@@ -315,7 +370,7 @@ h2.section {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-3);
-  margin: 22px 0 8px;
+  margin: 26px 0 9px;
 }
 
 /* Abteilungsname direkt über den Waren, ohne eigene Karte und ohne die großen
@@ -358,13 +413,46 @@ h2.section {
 /* --- Reiterleiste --------------------------------------------------------- */
 
 .tabbar {
+  position: relative;
   display: flex;
-  border-top: 1px solid var(--line);
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
-  backdrop-filter: saturate(180%) blur(14px);
-  -webkit-backdrop-filter: saturate(180%) blur(14px);
-  padding-bottom: var(--safe-b);
   flex: none;
+  padding-bottom: var(--safe-b);
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  /* Beim Langdrücken markiert Safari sonst die Beschriftung und bietet
+     „Kopieren“ an. Nichts verrät deutlicher, dass eine App aus dem Browser
+     kommt. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Haarlinie statt Strich: `border-top: 1px` sind auf einem 3fach-Bildschirm
+   drei Gerätepixel und damit dreimal so dick wie die Linie, die das System
+   zieht. Halbiert stimmt es. */
+.tabbar::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--line);
+  transform: scaleY(0.5);
+  transform-origin: top;
+}
+
+/*
+ * Die Leiste weicht der Tastatur.
+ *
+ * Sie behielte sonst ihre 83 Punkte, obwohl längst die Tastatur davor liegt –
+ * und die Eingabezeile im Einkauf schwebte genau diese 83 Punkte über der
+ * Tastaturkante. `display: none` nimmt sie aus dem Fluss, die Zeile sinkt auf
+ * die Tastatur. Die Klasse setzt trackKeyboardInset() auf <html>.
+ */
+.tastatur .tabbar {
+  display: none;
 }
 
 .tab {
@@ -374,11 +462,11 @@ h2.section {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: 2px;
   /* --text-2, nicht --text-3: Die Reiter sind Navigation, keine Nebensache.
      Zu blass gesetzt sehen sie aus, als wären sie abgeschaltet. */
   color: var(--text-2);
-  padding: 6px 2px;
+  padding: 5px 2px 4px;
   transition: color 0.15s;
 }
 
@@ -390,18 +478,27 @@ h2.section {
   position: relative;
   display: block;
   line-height: 0;
+  transition: transform 0.1s;
+}
+
+.tab:active .tab-icon {
+  transform: scale(0.86);
 }
 
 .tab-label {
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.005em;
+}
+
+.tab-on .tab-label {
+  font-weight: 700;
 }
 
 .tab-badge {
   position: absolute;
-  top: -5px;
-  right: -9px;
+  top: -3px;
+  right: -8px;
   min-width: 16px;
   height: 16px;
   padding: 0 4px;
@@ -412,6 +509,8 @@ h2.section {
   font-weight: 700;
   line-height: 16px;
   text-align: center;
+  /* Sonst verschluckt der durchscheinende Untergrund die Zahl. */
+  box-shadow: 0 0 0 2px var(--surface);
 }
 
 .tab-badge-soft {
@@ -423,7 +522,7 @@ h2.section {
 .card {
   background: var(--surface);
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  border: 1px solid var(--line);
   overflow: hidden;
 }
 
@@ -503,7 +602,7 @@ h2.section {
 }
 
 .big-money {
-  font-size: 34px;
+  font-size: 40px;
   font-weight: 700;
   letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
@@ -521,8 +620,8 @@ h2.section {
 .tile {
   background: var(--surface);
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  padding: 14px;
+  border: 1px solid var(--line);
+  padding: 15px;
   text-align: left;
   display: block;
 }
@@ -585,7 +684,9 @@ h2.section {
   color: var(--text);
   font-size: 15px;
   font-weight: 600;
-  transition: opacity 0.15s, transform 0.08s;
+  transition:
+    opacity 0.15s,
+    transform 0.08s;
 }
 
 .btn:active {
@@ -682,7 +783,9 @@ h2.section {
   font-size: 14.5px;
   font-weight: 600;
   color: var(--text-2);
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 
 .segmented > button[aria-pressed='true'] {
@@ -936,7 +1039,10 @@ h2.section {
   display: grid;
   place-items: center;
   color: transparent;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s;
 }
 
 .check-on {
@@ -975,7 +1081,9 @@ h2.section {
   justify-content: center;
   gap: 1px;
   font-variant-numeric: tabular-nums;
-  transition: background 0.15s, transform 0.08s;
+  transition:
+    background 0.15s,
+    transform 0.08s;
 }
 
 .slot:active {
@@ -1078,6 +1186,77 @@ h2.section {
   font-variant-numeric: tabular-nums;
 }
 
+/* --- Einräumen nach dem Einkauf -------------------------------------------- */
+
+/*
+ * Der Vorschlag steht nur zwei Stunden – die Spanne zwischen Kasse und
+ * Auspacken. Was so kurz da ist, muss auffallen, sonst geht es unter: deshalb
+ * ein abgesetzter Block mit eigener Fläche, nicht bloß eine Überschrift.
+ */
+.einraeumen {
+  margin-bottom: 20px;
+  padding: 14px;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+}
+
+.einraeumen-titel {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+/* --- Aufklappbarer Block --------------------------------------------------- */
+
+/*
+ * „Im Wagen“ im Einkauf: Abgehaktes sammelt sich hier, statt zwischen den
+ * Abteilungen zu stehen. Am Ende eines Wocheneinkaufs lagen sonst dreißig
+ * durchgestrichene Zeilen zwischen den fünf, die noch fehlen.
+ */
+.ausklapp {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: var(--touch);
+  margin-top: 20px;
+  padding: 0 2px;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+}
+
+.ausklapp-pfeil {
+  width: 6px;
+  height: 6px;
+  border-right: 1.8px solid currentColor;
+  border-bottom: 1.8px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease;
+  flex: none;
+}
+
+.ausklapp-pfeil-auf {
+  transform: rotate(45deg);
+}
+
+.ausklapp-zahl {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+/* Vorschläge liegen über der Eingabezeile, nicht darunter – unterhalb lagen
+   sie zwischen Feld und Tastatur und waren beim Tippen nie zu sehen. */
+.vorschlaege {
+  flex: none;
+  margin: 0;
+  padding: 8px 16px 2px;
+  background: var(--bg);
+}
+
 /* --- Suche ---------------------------------------------------------------- */
 
 .search {
@@ -1103,7 +1282,16 @@ h2.section {
 
 /* --- Notizen -------------------------------------------------------------- */
 
+/*
+ * Die Farbe einer Notiz ist ein Streifen an der Kante, keine getönte Fläche.
+ *
+ * Getönt müsste jede der sechs Farben ihren eigenen Textkontrast mitbringen,
+ * in hell und in dunkel – zwölf Werte, die nachzurechnen wären. Ein Streifen
+ * daneben trägt keinen Text und kommt deshalb mit den fünf Farben aus, die es
+ * ohnehin gibt und die längst geprüft sind.
+ */
 .note-card {
+  position: relative;
   display: block;
   width: 100%;
   text-align: left;
@@ -1113,6 +1301,34 @@ h2.section {
 
 .note-card + .note-card {
   border-top: 1px solid var(--line);
+}
+
+.note-card[data-farbe]:not([data-farbe='keine'])::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--note);
+}
+
+/* Ohne Klassenbindung, damit Notizkarte und Farbwahl im Blatt dieselbe
+   Zuordnung benutzen und nicht auseinanderlaufen können. */
+[data-farbe='gelb'] {
+  --note: var(--warn);
+}
+[data-farbe='gruen'] {
+  --note: var(--good);
+}
+[data-farbe='blau'] {
+  --note: var(--accent);
+}
+[data-farbe='rot'] {
+  --note: var(--bad);
+}
+[data-farbe='lila'] {
+  --note: var(--accent-2);
 }
 
 .note-title {
@@ -1133,6 +1349,107 @@ h2.section {
   -webkit-box-orient: vertical;
   overflow: hidden;
   white-space: pre-wrap;
+}
+
+/* Wie weit eine Häkchenliste ist, ohne sie zu öffnen. */
+.note-fortschritt {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+/* --- Häkchen in einer Notiz ----------------------------------------------- */
+
+.check-zeile {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: var(--touch);
+  padding: 6px 0;
+  text-align: left;
+}
+
+.check-zeile-text {
+  flex: 1;
+  min-width: 0;
+  padding-top: 3px;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+.check-zeile-erledigt .check-zeile-text {
+  color: var(--text-3);
+  text-decoration: line-through;
+}
+
+.check-klein {
+  flex: none;
+  width: 23px;
+  height: 23px;
+  margin-top: 1px;
+  border-radius: 50%;
+  border: 2px solid var(--text-3);
+  display: grid;
+  place-items: center;
+  color: transparent;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s;
+}
+
+.check-klein-on {
+  background: var(--good);
+  border-color: var(--good);
+  color: #fff;
+}
+
+/* Farbwahl im Blatt: fünf Punkte und ein durchgestrichener für „keine“. */
+.farben {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.farbe {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  display: grid;
+  place-items: center;
+}
+
+.farbe-punkt {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--note, var(--surface-2));
+  border: 1px solid var(--line);
+}
+
+.farbe-on {
+  border-color: var(--text-2);
+}
+
+/* Dieselbe Farbe als Punkt vor einer Zeile – auf der Startseite, wo kein
+   Streifen an der Kante Platz hätte. */
+.punkt-farbe {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--note, var(--text-3));
+}
+
+.punkt-farbe[data-farbe='keine'] {
+  background: var(--text-3);
+  opacity: 0.4;
 }
 
 .textarea {
@@ -1313,7 +1630,7 @@ h2.section {
   padding: 15px 16px;
   background: var(--surface);
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  border: 1px solid var(--line);
   transition: transform 0.08s;
 }
 
@@ -1365,7 +1682,7 @@ h2.section {
 .quick-tile {
   background: var(--surface);
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  border: 1px solid var(--line);
   padding: 14px 8px;
   display: flex;
   flex-direction: column;

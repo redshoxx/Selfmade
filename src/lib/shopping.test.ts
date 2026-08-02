@@ -299,6 +299,30 @@ describe('neuGekauft', () => {
     expect(neuGekauft({ shopItems: [gekauft()], pantryItems: [vorrat] }, 1000)).toEqual([])
   })
 
+  /*
+   * Das Fenster ist zwei Stunden – die Spanne zwischen Kasse und Auspacken.
+   *
+   * Vorher waren es drei Tage. Was am Abend noch dastand, hatte man bewusst
+   * nicht übernommen, und es am nächsten Morgen wieder angeboten zu bekommen
+   * macht aus einem Angebot eine Aufgabe.
+   */
+  const STUNDE = 60 * 60 * 1000
+  const jetzt = 10 * STUNDE
+
+  it('bietet an, was vor einer Stunde gekauft wurde', () => {
+    const liste = neuGekauft(
+      { shopItems: [gekauft({ deletedAt: jetzt - STUNDE })], pantryItems: [] },
+      jetzt,
+    )
+    expect(liste).toHaveLength(1)
+  })
+
+  it('vergisst nach zwei Stunden von selbst', () => {
+    expect(
+      neuGekauft({ shopItems: [gekauft({ deletedAt: jetzt - 3 * STUNDE })], pantryItems: [] }, jetzt),
+    ).toEqual([])
+  })
+
   it('vergisst Älteres von selbst', () => {
     const vorVierTagen = 1000 - 4 * 24 * 60 * 60 * 1000
     expect(neuGekauft({ shopItems: [gekauft({ deletedAt: vorVierTagen })], pantryItems: [] }, 1000)).toEqual([])

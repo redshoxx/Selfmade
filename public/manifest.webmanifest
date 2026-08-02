@@ -35,6 +35,12 @@
       "short_name": "Vorrat",
       "url": "/?tab=vorrat&filter=ablauf",
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Notizen",
+      "short_name": "Notizen",
+      "url": "/?tab=notizen",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }

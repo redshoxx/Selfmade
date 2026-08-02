@@ -1,9 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { NOTE_COLORS, alsTab, leseChecks } from './types'
 import type {
   AisleId,
   Category,
   Challenge,
   Note,
+  NoteColor,
   PantryItem,
   Pot,
   PotEntry,
@@ -116,6 +118,10 @@ function noteFromRow(row: Row): Note {
     title: asText(row.title),
     body: asText(row.body),
     pinned: asBool(row.pinned),
+    // Eine unbekannte Farbe – etwa von einer neueren Fassung auf dem anderen
+    // Gerät – wird zu „keine“, statt die Notiz unlesbar zu machen.
+    color: NOTE_COLORS.includes(row.color as NoteColor) ? (row.color as NoteColor) : 'keine',
+    checks: leseChecks(row.checks),
     updatedAt: asNum(row.updated_at),
     deletedAt: asNullNum(row.deleted_at),
   }
@@ -127,6 +133,8 @@ function noteToRow(note: Note): Row {
     title: note.title,
     body: note.body,
     pinned: note.pinned,
+    color: note.color,
+    checks: note.checks,
     updated_at: note.updatedAt,
     deleted_at: note.deletedAt,
   }
@@ -198,19 +206,15 @@ function prefsFromRow(row: Row): PrefsRow {
       budgetCents: asNullNum(entry.budget_cents ?? entry.budgetCents),
     }))
 
-  const roheEinstellungen = row.settings && typeof row.settings === 'object' ? (row.settings as Row) : {}
+  const roheEinstellungen =
+    row.settings && typeof row.settings === 'object' ? (row.settings as Row) : {}
   const settings: Partial<Settings> = {}
-  if (typeof roheEinstellungen.display_name === 'string') settings.displayName = roheEinstellungen.display_name
-  const startTab = roheEinstellungen.start_tab
-  if (
-    startTab === 'start' ||
-    startTab === 'geld' ||
-    startTab === 'sparen' ||
-    startTab === 'einkauf' ||
-    startTab === 'vorrat'
-  ) {
-    settings.startTab = startTab
-  }
+  if (typeof roheEinstellungen.display_name === 'string')
+    settings.displayName = roheEinstellungen.display_name
+  // Ein Gerät, das noch die alte Fassung fährt, schickt womöglich `sparen` –
+  // `alsTab` bildet das auf `geld` ab, statt die Einstellung zu verwerfen.
+  const startTab = alsTab(roheEinstellungen.start_tab)
+  if (startTab) settings.startTab = startTab
 
   return { categories, settings, prefsUpdatedAt: asNum(row.updated_at) }
 }
@@ -365,7 +369,9 @@ function challengeFromRow(row: Row): Challenge {
     unit: row.unit === 'tag' || row.unit === 'monat' ? row.unit : 'woche',
     startDate: asText(row.start_date),
     potId: asNullText(row.pot_id),
-    filled: Array.isArray(row.filled) ? (row.filled as unknown[]).filter((n): n is number => Number.isInteger(n)) : [],
+    filled: Array.isArray(row.filled)
+      ? (row.filled as unknown[]).filter((n): n is number => Number.isInteger(n))
+      : [],
     archived: asBool(row.archived),
     updatedAt: asNum(row.updated_at),
     deletedAt: asNullNum(row.deleted_at),
@@ -426,7 +432,10 @@ export const rowCodecs = {
  */
 
 export async function ladeErlaubte(client: SupabaseClient): Promise<Person[]> {
-  const { data, error } = await client.from('erlaubte_personen').select('email, name').order('email')
+  const { data, error } = await client
+    .from('erlaubte_personen')
+    .select('email, name')
+    .order('email')
   if (error) throw new Error(uebersetzeFehler(error.message))
   return ((data ?? []) as Row[]).map((row) => ({
     email: asText(row.email),
@@ -434,7 +443,11 @@ export async function ladeErlaubte(client: SupabaseClient): Promise<Person[]> {
   }))
 }
 
-export async function erlaubePerson(client: SupabaseClient, email: string, name: string): Promise<void> {
+export async function erlaubePerson(
+  client: SupabaseClient,
+  email: string,
+  name: string,
+): Promise<void> {
   // Kleingeschrieben abgelegt, damit „Anna@…“ und „anna@…“ dieselbe Person
   // sind. Die Prüfung in der Datenbank vergleicht ebenfalls kleingeschrieben.
   const { error } = await client
@@ -444,7 +457,10 @@ export async function erlaubePerson(client: SupabaseClient, email: string, name:
 }
 
 export async function entfernePerson(client: SupabaseClient, email: string): Promise<void> {
-  const { error } = await client.from('erlaubte_personen').delete().eq('email', email.trim().toLowerCase())
+  const { error } = await client
+    .from('erlaubte_personen')
+    .delete()
+    .eq('email', email.trim().toLowerCase())
   if (error) throw new Error(uebersetzeFehler(error.message))
 }
 
@@ -509,7 +525,10 @@ export async function pullAll(
   /** Ergebnis auswerten und einen etwaigen Fehler vermerken. */
   const rows = (table: string, result: { data: unknown; error: unknown }): Row[] => {
     if (result.error) {
-      errors.push({ table, error: result.error as { code?: string; message?: string } })
+      errors.push({
+        table,
+        error: result.error as { code?: string; message?: string },
+      })
       return []
     }
     return (result.data ?? []) as Row[]
@@ -535,7 +554,10 @@ export async function pullAll(
     client.from('shop_templates').select('*'),
   ])
 
-  const [[txs, pots, potEntries, challenges, recurring, prefs], shared] = await Promise.all([privat, geteilt])
+  const [[txs, pots, potEntries, challenges, recurring, prefs], shared] = await Promise.all([
+    privat,
+    geteilt,
+  ])
 
   const incoming: Partial<State> = {
     txs: rows('txs', txs).map(txFromRow),
@@ -589,21 +611,39 @@ export async function pushChanges(
   args: { userId: string; since: number },
 ): Promise<void> {
   const { userId, since } = args
-  const neuer = <T extends { updatedAt: number }>(list: readonly T[]) => list.filter((item) => item.updatedAt > since)
+  const neuer = <T extends { updatedAt: number }>(list: readonly T[]) =>
+    list.filter((item) => item.updatedAt > since)
 
   const jobs: PromiseLike<unknown>[] = []
   const push = (table: string, rows: Row[]) => {
     if (rows.length > 0) jobs.push(client.from(table).upsert(rows, { onConflict: 'id' }))
   }
 
-  push('txs', neuer(state.txs).map((tx) => txToRow(tx, userId)))
-  push('pots', neuer(state.pots).map((pot) => potToRow(pot, userId)))
-  push('pot_entries', neuer(state.potEntries).map((entry) => potEntryToRow(entry, userId)))
-  push('challenges', neuer(state.challenges).map((c) => challengeToRow(c, userId)))
-  push('recurring_txs', neuer(state.recurringTxs).map((r) => recurringToRow(r, userId)))
+  push(
+    'txs',
+    neuer(state.txs).map((tx) => txToRow(tx, userId)),
+  )
+  push(
+    'pots',
+    neuer(state.pots).map((pot) => potToRow(pot, userId)),
+  )
+  push(
+    'pot_entries',
+    neuer(state.potEntries).map((entry) => potEntryToRow(entry, userId)),
+  )
+  push(
+    'challenges',
+    neuer(state.challenges).map((c) => challengeToRow(c, userId)),
+  )
+  push(
+    'recurring_txs',
+    neuer(state.recurringTxs).map((r) => recurringToRow(r, userId)),
+  )
 
   if (state.prefsUpdatedAt > since) {
-    jobs.push(client.from('user_prefs').upsert(prefsToRow(state, userId), { onConflict: 'user_id' }))
+    jobs.push(
+      client.from('user_prefs').upsert(prefsToRow(state, userId), { onConflict: 'user_id' }),
+    )
   }
 
   push('shop_items', neuer(state.shopItems).map(shopToRow))
@@ -642,22 +682,34 @@ export function subscribeShared(
   // Sonst sähe man sie erst nach einem Neuladen – und niemand lädt neu, um
   // nachzusehen, ob jemand etwas geschrieben hat.
   const tabellen = [
-    { table: 'shop_items', map: (row: Row): Partial<State> => ({ shopItems: [shopFromRow(row)] }) },
-    { table: 'pantry_items', map: (row: Row): Partial<State> => ({ pantryItems: [pantryFromRow(row)] }) },
-    { table: 'notes', map: (row: Row): Partial<State> => ({ notes: [noteFromRow(row)] }) },
-    { table: 'shop_templates', map: (row: Row): Partial<State> => ({ shopTemplates: [templateFromRow(row)] }) },
+    {
+      table: 'shop_items',
+      map: (row: Row): Partial<State> => ({ shopItems: [shopFromRow(row)] }),
+    },
+    {
+      table: 'pantry_items',
+      map: (row: Row): Partial<State> => ({
+        pantryItems: [pantryFromRow(row)],
+      }),
+    },
+    {
+      table: 'notes',
+      map: (row: Row): Partial<State> => ({ notes: [noteFromRow(row)] }),
+    },
+    {
+      table: 'shop_templates',
+      map: (row: Row): Partial<State> => ({
+        shopTemplates: [templateFromRow(row)],
+      }),
+    },
   ]
 
   let channel = client.channel('geteilt')
   for (const { table, map } of tabellen) {
-    channel = channel.on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table },
-      (payload) => {
-        const row = payload.new as Row | null
-        if (row && row.id) onChange(map(row))
-      },
-    )
+    channel = channel.on('postgres_changes', { event: '*', schema: 'public', table }, (payload) => {
+      const row = payload.new as Row | null
+      if (row && row.id) onChange(map(row))
+    })
   }
   channel.subscribe()
 

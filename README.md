@@ -8,10 +8,15 @@ Fünf Bereiche, alle in Daumenreichweite:
 | Bereich | Wozu |
 | --- | --- |
 | **Start** | Wie steht der Monat, was läuft zu Hause ab, was fehlt beim Einkauf |
-| **Geld** | Einnahmen und Ausgaben mit Kategorien, Monatssaldo, Budgets |
-| **Sparen** | Spartöpfe und Spar-Challenges (1 €, 2 €, 5 € und mehr) |
+| **Geld** | Einnahmen und Ausgaben mit Kategorien, Budgets – und dahinter das Sparen: Zurücklegen, Töpfe, Challenges |
 | **Einkauf** | Geteilte Liste mit Mengen, Preisen und Notizen, sortiert nach dem Weg durch *deinen* Laden |
 | **Vorrat** | Was zu Hause steht, mit Mindesthaltbarkeitsdatum und Warnung |
+| **Notizen** | Geteilter Zettel mit Häkchenlisten, Farben und Suche |
+
+Fünf, nicht sechs: Auf einem iPhone 12 ist der Bildschirm 390 Punkte breit, und
+bei sechs Reitern bleiben je 65 – dort bricht „Einkauf“ um. Sparen steht deshalb
+in Geld, hinter einem Umschalter *Monat | Sparen*. Sachlich gehört es ohnehin
+dorthin: Was man zurücklegt, ist das, was der Monat übrig gelassen hat.
 
 Die App ist installierbar (PWA): auf dem iPhone über *Teilen → Zum Home-Bildschirm*,
 auf Android über *Zum Startbildschirm hinzufügen*. Danach startet sie im Vollbild
@@ -103,10 +108,24 @@ zurück. Was schon draufsteht, wird auch hier zusammengezählt statt verdoppelt.
 
 ### Notizen
 
-Jeder Eintrag kann eine Notiz tragen – „die im blauen Karton“, „nur die große
-Packung“ –, sichtbar für alle, die mitlesen. Daneben gibt es unter *Einkauf →
-Notizen* einen geteilten Zettel für alles, was keine Einkaufsliste ist:
-Rezepte, Maße, Erinnerungen. Angeheftetes steht oben.
+Jeder Einkaufseintrag kann eine Notiz tragen – „die im blauen Karton“, „nur die
+große Packung“ –, sichtbar für alle, die mitlesen.
+
+Daneben ist **Notizen** ein eigener Bereich: der geteilte Zettel für alles, was
+keine Einkaufsliste ist. Rezepte, Maße, Packlisten. Drei Dinge kann er:
+
+- **Häkchen.** Eine Notiz kann Punkte zum Abhaken enthalten. Sie werden sofort
+  geschrieben, ohne „Speichern“ – wie ein Häkchen auf der Einkaufsliste. Das ist
+  kein Zufall: Bei einer geteilten Packliste würde ein Zurückschreiben der
+  ganzen Liste beim Schließen die Häkchen überschreiben, die der andere in der
+  Zwischenzeit gesetzt hat.
+- **Farbe.** Sechs Farben als Streifen an der Kante. Was worum geht, erkennt man
+  vor dem Lesen.
+- **Suche.** Ab acht Notizen, über Titel, Text *und* Häkchenpunkte – in einer
+  Packliste steht das Gesuchte praktisch nie im Titel.
+
+Notizen mit offenen Häkchen stehen auf der Startseite unter *Noch abzuhaken*.
+Angeheftetes steht oben.
 
 ### Verschrieben? Rückgängig
 
@@ -128,11 +147,17 @@ abgehakte Eintrag, den es im Vorrat schon gibt, seinen Posten hoch. Erkannt
 wird über die Herkunft (der Eintrag kam aus einem Nachkaufen-Vorschlag) oder
 über den Namen. „2 Milch“ abgehakt heißt: zwei mehr im Kühlschrank.
 
-**Zu Hause, beim Auspacken.** Was neu ist, wartet im Vorrat unter *Neu gekauft*.
-Ein Tipp öffnet ein Blatt mit vorbelegtem Namen, Menge und Abteilung – offen
-bleibt genau das, was der Einkauf nicht wissen kann: das Datum auf der
-Packung. Der Streifen räumt sich von selbst ab; was du nicht übernimmst,
-verschwindet nach drei Tagen.
+**Zu Hause, beim Auspacken.** Was neu ist, wartet oben im Vorrat: „3 Sachen
+einräumen“. **Alle** übernimmt sie in einem Tipp. Einzeln antippen öffnet ein
+Blatt mit vorbelegtem Namen, Menge und Abteilung – offen bleibt genau das, was
+der Einkauf nicht wissen kann: das Datum auf der Packung.
+
+Der Vorschlag räumt sich von selbst ab und steht **zwei Stunden** – die Spanne
+zwischen Kasse und Auspacken. Länger wäre nur scheinbar großzügig: Was am Abend
+noch dasteht, hat man bewusst nicht übernommen, und es am nächsten Morgen
+wieder angeboten zu bekommen macht aus einem Angebot eine Aufgabe. Verloren
+geht dabei nichts – der Einkaufseintrag bleibt liegen, er wird nur nicht mehr
+vorgeschlagen.
 
 Warum nicht alles automatisch: Dann stünden der Coffee-to-go und das Brötchen
 von heute Morgen als „Vorrat“ da. Ein Vorrat voller Dinge, die keine sind, ist
@@ -211,6 +236,33 @@ statt eine Schaltfläche anzubieten, die nichts mehr täte.
 
 ---
 
+## Gebaut für ein iPhone am Home-Bildschirm
+
+Die App läuft im Browser, soll aber keiner sein. Vier Dinge machen dort den
+Unterschied, und alle vier sitzen in der Leiste unten:
+
+- **Der aktive Reiter ist gefüllt, nicht nur eingefärbt.** Farbe allein trägt zu
+  wenig – bei Sonnenlicht, bei eingeschränktem Farbsehen, im Vorbeigehen. Jedes
+  der fünf Symbole gibt es deshalb doppelt, als Umriss und als Fläche.
+- **Eine Haarlinie oben, keine Linie.** `1px` sind auf einem 3fach-Bildschirm
+  drei Gerätepixel und damit dreimal so dick wie die Trennlinie, die iOS zieht.
+- **Kein Auswahlmenü beim Langdrücken.** Ohne `-webkit-touch-callout: none`
+  bietet Safari „Kopieren“ auf der Beschriftung an. Nichts verrät deutlicher,
+  woher eine App kommt.
+- **Die Leiste weicht der Tastatur.** Sonst behält sie ihre 83 Punkte, obwohl
+  längst die Tastatur davor liegt – und die Eingabezeile im Einkauf schwebt
+  genau diese 83 Punkte über der Tastaturkante.
+
+Dazu hat jeder Bildschirm denselben Bau: Kopf, Inhalt, Leiste. Vorher trug jede
+Ansicht ihren Titel selbst, und das Zahnrad schwebte über allen – mit einem
+Ausgleich in der Titelzeile, der auf Vorrat und Notizen nicht reichte. Dort lag
+es 12 Punkte über der Schaltfläche rechts oben. Das Zahnrad steht jetzt im Kopf
+der Startseite.
+
+Gemessen wird das nicht mit dem Auge: `scratchpad/neuesgesicht.mjs` fährt die
+App bei 390 × 844 durch alle fünf Reiter und rechnet nach, ob sich Titel und
+Schaltflächen überschneiden und ob etwas waagerecht überläuft.
+
 ## Ablaufdaten mit Augenmaß
 
 Die Vorwarnzeit hängt an der Abteilung, nicht an einer festen Frist:
@@ -231,9 +283,21 @@ zu spät, und Warnungen, die zu oft kommen, klickt man irgendwann blind weg.
 
 ---
 
+## Sparen: ein Knopf
+
+Der ganze Bereich ist auf einen Handgriff zugeschnitten. Oben der Sparstand,
+darunter **Zurücklegen**: Betrag eintippen, fertig. Wer noch gar keinen Spartopf
+hat, braucht auch keinen anzulegen – die App legt beim ersten Mal selbst einen
+an, in einem Zug mit der Buchung.
+
+Die Spartöpfe treten dafür in den Hintergrund. Sie waren nie das Ziel, sondern
+die Buchhaltung dahinter, und wer nur einen hat, hat nichts zu wählen. Erst ab
+dem zweiten Topf steht die Liste da; verwalten lassen sie sich jederzeit über
+*Töpfe verwalten*.
+
 ## Spar-Challenges
 
-Eine Challenge ist eine Reihe von Feldern; jedes steht für einen Betrag. Wer
+Unverändert. Eine Challenge ist eine Reihe von Feldern; jedes steht für einen Betrag. Wer
 eines abhakt, zahlt damit **echtes Geld in den zugehörigen Spartopf ein** – der
 Fortschritt steht also nicht nur im Raster, sondern auch im Sparstand. Nimmt
 man das Häkchen zurück, verschwindet die Einzahlung wieder.
@@ -531,7 +595,7 @@ steht in der Monatssumme ein Cent, den niemand erklären kann.
 ```sh
 npm install
 npm run dev        # Entwicklungsserver auf Port 5173
-npm test           # 254 Tests
+npm test           # 267 Tests
 npm run typecheck
 npm run build      # Produktionsbündel nach dist/
 npm run build:single  # alles in einer HTML-Datei, nach dist-single/
@@ -570,7 +634,10 @@ src/
     sync.ts         Übersetzung Datenbank ↔ App, Hoch- und Runterladen, Zugangsliste
     useApp.tsx      Zustand, Anmeldung und Abgleich als Kontext
   views/            Ein Bereich je Datei
+    SparenBereich.tsx  Kein eigener Reiter mehr, sondern ein Bereich in Geld
   components/       Wiederverwendbare Bausteine
+    Kopf.tsx           Die eine Zeile, in der oben rechts etwas stehen darf
+    TabBar.tsx         Fünf Reiter, gefüllt wenn aktiv, weicht der Tastatur
 supabase/
   schema.sql        Tabellen, Zugriffsregeln, Zugangsliste, Zeitplan
   functions/        Edge Function für die abendliche Erinnerung
@@ -578,7 +645,7 @@ supabase/
 ```
 
 Die Rechenlogik liegt vollständig in `lib/` und ist ohne Oberfläche testbar –
-alle 254 Tests laufen ohne Browser. Was in den Views steht, ist Darstellung.
+alle 267 Tests laufen ohne Browser. Was in den Views steht, ist Darstellung.
 
 ### Auf dem Telefon
 

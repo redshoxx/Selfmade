@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { AmountField, Bar, Empty, Field } from '../components/Bits'
-import { IconCheck, IconClose, IconPlus, IconTrash } from '../components/Icons'
+import { IconCheck, IconClose, IconPlus, IconTemplate, IconTrash } from '../components/Icons'
+import { Kopf, KopfKnopf } from '../components/Kopf'
 import { Sheet } from '../components/Sheet'
 import { UndoBar } from '../components/Undo'
 import { AISLES, aisle, guessAisle } from '../lib/aisles'
@@ -14,7 +15,6 @@ import { useApp } from '../lib/useApp'
 import { useSwipeToDelete } from '../lib/useSwipe'
 import { useUndo } from '../lib/useUndo'
 import type { AisleId, ShopItem } from '../lib/types'
-import { NotizenView } from './NotizenView'
 import { VorlagenSheet } from './VorlagenSheet'
 import { AbschlussSheet } from './AbschlussSheet'
 
@@ -32,13 +32,13 @@ const SUCHE_AB = 12
 
 export function EinkaufView() {
   const { state, dispatch, session, zugang } = useApp()
-  const [bereich, setBereich] = useState<'liste' | 'notizen'>('liste')
   const [draft, setDraft] = useState('')
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState<ShopItem | null>(null)
   const [pricing, setPricing] = useState<ShopItem | null>(null)
   const [templates, setTemplates] = useState(false)
   const [finishing, setFinishing] = useState(false)
+  const [erledigteOffen, setErledigteOffen] = useState(false)
   const input = useRef<HTMLInputElement>(null)
   const { undo, dismiss, remove } = useUndo(dispatch)
 
@@ -46,17 +46,35 @@ export function EinkaufView() {
   const restock = useMemo(() => restockSuggestions(state), [state])
   const hints = useMemo(() => suggestions(state, draft, 5), [state, draft])
 
+  const passt = (item: ShopItem, needle: string) =>
+    !needle || item.name.toLowerCase().includes(needle)
+
+  /*
+   * Nur das Offene steht in den Abteilungen.
+   *
+   * Vorher mischte sich Abgehaktes darunter – am Ende eines Wocheneinkaufs
+   * standen dreißig durchgestrichene Zeilen zwischen den fünf, die noch
+   * fehlen. Erledigtes sammelt sich jetzt unten in einem Block, der zu ist,
+   * bis man ihn aufmacht.
+   */
   const groups = useMemo(() => {
-    const all = groupForShopping(state, { includeDone: true })
+    const all = groupForShopping(state)
     const needle = query.trim().toLowerCase()
     if (!needle) return all
     return all
       .map((group) => ({
         ...group,
-        items: group.items.filter((item) => item.name.toLowerCase().includes(needle)),
+        items: group.items.filter((item) => passt(item, needle)),
       }))
       .filter((group) => group.items.length > 0)
   }, [state, query])
+
+  const erledigte = useMemo(() => {
+    const needle = query.trim().toLowerCase()
+    return live(state.shopItems)
+      .filter((item) => item.done && passt(item, needle))
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+  }, [state.shopItems, query])
 
   /**
    * Etwas auf die Liste setzen.
@@ -109,32 +127,21 @@ export function EinkaufView() {
     dispatch({ type: 'shop/toggle', id: item.id })
   }
 
-  if (bereich === 'notizen') {
-    return <NotizenView onBack={() => setBereich('liste')} />
-  }
-
   return (
     <>
+      <Kopf
+        titel="Einkauf"
+        beiwerk={
+          counts.open > 0 ? `${counts.open} offen` : counts.total > 0 ? 'alles erledigt' : undefined
+        }
+        aktionen={
+          <KopfKnopf label="Vorlagen" onClick={() => setTemplates(true)}>
+            <IconTemplate size={20} />
+          </KopfKnopf>
+        }
+      />
+
       <div className="scroll">
-        <div className="head">
-          <h1>Einkauf</h1>
-          <span className="head-sub">
-            {counts.open > 0 ? `${counts.open} offen` : counts.total > 0 ? 'alles erledigt' : ''}
-          </span>
-        </div>
-
-        <div className="segmented" style={{ marginBottom: 14 }}>
-          <button type="button" aria-pressed onClick={() => setBereich('liste')}>
-            Liste
-          </button>
-          <button type="button" aria-pressed={false} onClick={() => setBereich('notizen')}>
-            Notizen
-            {live(state.notes).length > 0 && (
-              <span className="muted"> · {live(state.notes).length}</span>
-            )}
-          </button>
-        </div>
-
         {counts.total > 0 && counts.done > 0 && (
           <div style={{ marginBottom: 14 }}>
             <Bar percent={(counts.done / counts.total) * 100} tone="good" />
@@ -213,7 +220,11 @@ export function EinkaufView() {
 
         {groups.length === 0 ? (
           query ? (
-            <Empty emoji="🔍" title="Nichts gefunden" text={`„${query}“ steht nicht auf der Liste.`} />
+            <Empty
+              emoji="🔍"
+              title="Nichts gefunden"
+              text={`„${query}“ steht nicht auf der Liste.`}
+            />
           ) : (
             <Empty
               emoji="🛒"
@@ -238,7 +249,12 @@ export function EinkaufView() {
                     onOpen={() => setOpen(item)}
                     onPrice={() => setPricing(item)}
                     onDelete={() =>
-                      remove('shopItems', item.id, { type: 'shop/remove', id: item.id }, `„${item.name}“ gelöscht`)
+                      remove(
+                        'shopItems',
+                        item.id,
+                        { type: 'shop/remove', id: item.id },
+                        `„${item.name}“ gelöscht`,
+                      )
                     }
                   />
                 ))}
@@ -247,28 +263,75 @@ export function EinkaufView() {
           ))
         )}
 
-        <div className="btn-row">
-          <button type="button" className="btn btn-wide" onClick={() => setTemplates(true)}>
-            Vorlagen
-          </button>
-        </div>
-
-        {counts.done > 0 && (
+        {erledigte.length > 0 && (
           <>
+            <button
+              type="button"
+              className="ausklapp"
+              onClick={() => setErledigteOffen(!erledigteOffen)}
+              aria-expanded={erledigteOffen}
+            >
+              <span
+                className={`ausklapp-pfeil${erledigteOffen ? ' ausklapp-pfeil-auf' : ''}`}
+                aria-hidden="true"
+              />
+              Im Wagen
+              <span className="ausklapp-zahl">{erledigte.length}</span>
+            </button>
+
+            {erledigteOffen && (
+              <div className="card">
+                {erledigte.map((item) => (
+                  <ShopRow
+                    key={item.id}
+                    item={item}
+                    onToggle={() => toggle(item)}
+                    onOpen={() => setOpen(item)}
+                    onPrice={() => setPricing(item)}
+                    onDelete={() =>
+                      remove(
+                        'shopItems',
+                        item.id,
+                        { type: 'shop/remove', id: item.id },
+                        `„${item.name}“ gelöscht`,
+                      )
+                    }
+                  />
+                ))}
+              </div>
+            )}
+
             <div className="btn-row">
-              <button type="button" className="btn" onClick={() => dispatch({ type: 'shop/clearDone' })}>
-                Erledigte entfernen
+              <button
+                type="button"
+                className="btn"
+                onClick={() => dispatch({ type: 'shop/clearDone' })}
+              >
+                Nur wegräumen
               </button>
               <button type="button" className="btn btn-primary" onClick={() => setFinishing(true)}>
                 Einkauf fertig
               </button>
             </div>
             <p className="small muted" style={{ marginTop: 10, textAlign: 'center' }}>
-              „Einkauf fertig“ merkt sich nebenbei die Reihenfolge der Abteilungen in deinem Laden.
+              „Einkauf fertig“ zählt den Vorrat hoch, bucht die Preise und merkt sich die
+              Reihenfolge der Abteilungen in deinem Laden.
             </p>
           </>
         )}
       </div>
+
+      {/* Vorschläge über der Eingabezeile, nicht darunter: Unterhalb lagen sie
+          zwischen Feld und Tastatur und waren im Tippen nie zu sehen. */}
+      {draft.trim().length > 0 && hints.length > 0 && (
+        <div className="chips vorschlaege">
+          {hints.map((name) => (
+            <button key={name} type="button" className="chip" onClick={() => add(name)}>
+              {name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Erfassen unten: dort, wo der Daumen ohnehin liegt. */}
       <div className="quick">
@@ -300,16 +363,6 @@ export function EinkaufView() {
         </button>
       </div>
 
-      {draft.trim().length > 0 && hints.length > 0 && (
-        <div className="chips" style={{ padding: '0 16px 10px', margin: 0 }}>
-          {hints.map((name) => (
-            <button key={name} type="button" className="chip" onClick={() => add(name)}>
-              {name}
-            </button>
-          ))}
-        </div>
-      )}
-
       <UndoBar state={undo} onDismiss={dismiss} />
 
       {open && (
@@ -317,7 +370,12 @@ export function EinkaufView() {
           item={open}
           onClose={() => setOpen(null)}
           onDelete={() => {
-            remove('shopItems', open.id, { type: 'shop/remove', id: open.id }, `„${open.name}“ gelöscht`)
+            remove(
+              'shopItems',
+              open.id,
+              { type: 'shop/remove', id: open.id },
+              `„${open.name}“ gelöscht`,
+            )
             setOpen(null)
           }}
         />
@@ -349,7 +407,11 @@ function ShopRow({
   const swipe = useSwipeToDelete(onDelete)
 
   const bump = (delta: number) => {
-    dispatch({ type: 'shop/update', id: item.id, patch: { qty: bumpQuantity(item.qty, delta) } })
+    dispatch({
+      type: 'shop/update',
+      id: item.id,
+      patch: { qty: bumpQuantity(item.qty, delta) },
+    })
   }
 
   const fremd = item.addedBy && item.addedBy !== state.settings.displayName
@@ -448,7 +510,11 @@ function PreisSheet({ item, onClose }: { item: ShopItem; onClose: () => void }) 
   const [cents, setCents] = useState<number | null>(item.priceCents)
 
   const save = () => {
-    dispatch({ type: 'shop/update', id: item.id, patch: { priceCents: cents } })
+    dispatch({
+      type: 'shop/update',
+      id: item.id,
+      patch: { priceCents: cents },
+    })
     onClose()
   }
 
@@ -469,7 +535,11 @@ function PreisSheet({ item, onClose }: { item: ShopItem; onClose: () => void }) 
             type="button"
             className="btn btn-wide"
             onClick={() => {
-              dispatch({ type: 'shop/update', id: item.id, patch: { priceCents: null } })
+              dispatch({
+                type: 'shop/update',
+                id: item.id,
+                patch: { priceCents: null },
+              })
               onClose()
             }}
           >
@@ -516,7 +586,13 @@ function ItemSheet({
           type="button"
           onClick={onDelete}
           aria-label="Löschen"
-          style={{ width: 40, height: 40, display: 'grid', placeItems: 'center', color: 'var(--bad)' }}
+          style={{
+            width: 40,
+            height: 40,
+            display: 'grid',
+            placeItems: 'center',
+            color: 'var(--bad)',
+          }}
         >
           <IconTrash />
         </button>

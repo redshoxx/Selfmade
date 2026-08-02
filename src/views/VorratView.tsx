@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Empty, Field, TapRow } from '../components/Bits'
 import { IconPlus, IconTrash } from '../components/Icons'
+import { Kopf, KopfKnopf } from '../components/Kopf'
 import { Sheet } from '../components/Sheet'
 import { neuGekauft, type NeuGekauft } from '../lib/shopping'
 import { AISLES, aisle, guessAisle } from '../lib/aisles'
@@ -39,9 +40,9 @@ export function VorratView({ startFilter }: { startFilter?: PantryFilter }) {
   const [creating, setCreating] = useState(false)
   const [uebernehmen, setUebernehmen] = useState<NeuGekauft | null>(null)
 
-  // Was gerade gekauft wurde und noch nicht im Vorrat steht. Der Streifen
-  // räumt sich von selbst ab: Übernommenes findet danach seinen Posten,
-  // alles andere fällt nach drei Tagen heraus.
+  // Was gerade gekauft wurde und noch nicht im Vorrat steht. Räumt sich von
+  // selbst ab: Übernommenes findet danach seinen Posten, alles andere fällt
+  // zwei Stunden nach dem Einkauf heraus – die Spanne bis zum Auspacken.
   const frisch = useMemo(() => neuGekauft(state), [state])
 
   const counts = pantryCounts(state)
@@ -53,36 +54,60 @@ export function VorratView({ startFilter }: { startFilter?: PantryFilter }) {
 
   return (
     <>
-      <div className="scroll">
-        <div className="head">
-          <h1>Vorrat</h1>
-          <button type="button" className="btn btn-ghost" onClick={() => setCreating(true)}>
-            <IconPlus size={18} />
-            Anlegen
-          </button>
-        </div>
+      <Kopf
+        titel="Vorrat"
+        aktionen={
+          <KopfKnopf label="Produkt anlegen" onClick={() => setCreating(true)} ton="akzent">
+            <IconPlus size={21} />
+          </KopfKnopf>
+        }
+      />
 
+      <div className="scroll">
         {frisch.length > 0 && (
-          <>
-            <h2 className="section" style={{ marginTop: 0 }}>
-              Neu gekauft
-            </h2>
+          <div className="einraeumen">
+            <div className="spread" style={{ marginBottom: 10 }}>
+              <span className="einraeumen-titel">
+                {frisch.length === 1 ? '1 Sache einräumen' : `${frisch.length} Sachen einräumen`}
+              </span>
+              <button
+                type="button"
+                className="btn btn-primary"
+                style={{ minHeight: 36, padding: '0 14px', fontSize: 14 }}
+                onClick={() =>
+                  dispatch({
+                    type: 'pantry/ausEinkauf',
+                    items: frisch.map((e) => ({
+                      name: e.name,
+                      aisle: e.aisle,
+                      qty: e.menge,
+                      unit: e.einheit,
+                      // Ohne Datum: Wer alle auf einmal übernimmt, hält keine
+                      // Packung in der Hand. Nachtragen geht jederzeit.
+                      bestBefore: null,
+                    })),
+                  })
+                }
+              >
+                Alle
+              </button>
+            </div>
             <div className="card">
-              {frisch.slice(0, 6).map((eintrag) => (
+              {frisch.slice(0, 8).map((eintrag) => (
                 <TapRow
                   key={eintrag.shopId}
                   title={eintrag.name}
-                  sub={`${trimNumber(eintrag.menge)} ${eintrag.einheit} · in den Vorrat`}
+                  sub={`${trimNumber(eintrag.menge)} ${eintrag.einheit} · mit Datum eintragen`}
                   leading={<span aria-hidden="true">{aisle(eintrag.aisle).emoji}</span>}
                   onClick={() => setUebernehmen(eintrag)}
                 />
               ))}
             </div>
-            <p className="small muted" style={{ margin: '8px 2px 16px' }}>
-              Tipp drauf, trag das Mindesthaltbarkeitsdatum ein – fertig. Was du nicht übernimmst,
-              verschwindet hier von selbst.
+            <p className="small muted" style={{ margin: '8px 2px 0' }}>
+              Einzeln antippen, wenn ein Mindesthaltbarkeitsdatum auf der Packung steht. Der
+              Vorschlag verschwindet zwei Stunden nach dem Einkauf von selbst.
             </p>
-          </>
+          </div>
         )}
 
         {counts.urgent > 0 && (
@@ -121,7 +146,9 @@ export function VorratView({ startFilter }: { startFilter?: PantryFilter }) {
           <Empty
             emoji="👌"
             title={filter === 'ablauf' ? 'Nichts läuft ab' : 'Nichts fehlt'}
-            text={filter === 'ablauf' ? 'Alle Mindesthaltbarkeitsdaten sind in Ordnung.' : undefined}
+            text={
+              filter === 'ablauf' ? 'Alle Mindesthaltbarkeitsdaten sind in Ordnung.' : undefined
+            }
           />
         ) : (
           <div className="card">
@@ -142,29 +169,23 @@ export function VorratView({ startFilter }: { startFilter?: PantryFilter }) {
             ))}
           </div>
         )}
-
-        {!empty && (
-          <div className="btn-row">
-            <button type="button" className="btn btn-wide" onClick={() => setCreating(true)}>
-              <IconPlus size={18} />
-              Produkt anlegen
-            </button>
-          </div>
-        )}
       </div>
 
       <UndoBar state={undo} onDismiss={dismiss} />
 
       {creating && <PantrySheet onClose={() => setCreating(false)} />}
-      {uebernehmen && (
-        <PantrySheet vorschlag={uebernehmen} onClose={() => setUebernehmen(null)} />
-      )}
+      {uebernehmen && <PantrySheet vorschlag={uebernehmen} onClose={() => setUebernehmen(null)} />}
       {open && (
         <PantrySheet
           item={open}
           onClose={() => setOpen(null)}
           onDelete={() => {
-            remove('pantryItems', open.id, { type: 'pantry/remove', id: open.id }, `„${open.name}“ gelöscht`)
+            remove(
+              'pantryItems',
+              open.id,
+              { type: 'pantry/remove', id: open.id },
+              `„${open.name}“ gelöscht`,
+            )
             setOpen(null)
           }}
         />
@@ -199,7 +220,7 @@ function PantrySheet({
   onDelete?: () => void
 }) {
   const { state, dispatch } = useApp()
-  const current = item ? live(state.pantryItems).find((i) => i.id === item.id) ?? item : undefined
+  const current = item ? (live(state.pantryItems).find((i) => i.id === item.id) ?? item) : undefined
 
   const [name, setName] = useState(current?.name ?? vorschlag?.name ?? '')
   const [qty, setQty] = useState(String(current?.qty ?? vorschlag?.menge ?? 1))
@@ -245,7 +266,13 @@ function PantrySheet({
             type="button"
             onClick={onDelete}
             aria-label="Löschen"
-            style={{ width: 40, height: 40, display: 'grid', placeItems: 'center', color: 'var(--bad)' }}
+            style={{
+              width: 40,
+              height: 40,
+              display: 'grid',
+              placeItems: 'center',
+              color: 'var(--bad)',
+            }}
           >
             <IconTrash />
           </button>
@@ -304,10 +331,7 @@ function PantrySheet({
         </p>
       )}
 
-      <Field
-        label="Nachkaufen ab (0 = nie erinnern)"
-        error={minValid ? null : 'Bitte eine Zahl.'}
-      >
+      <Field label="Nachkaufen ab (0 = nie erinnern)" error={minValid ? null : 'Bitte eine Zahl.'}>
         <input
           className="input"
           inputMode="decimal"
@@ -368,7 +392,12 @@ function PantrySheet({
       )}
 
       <div className="btn-row">
-        <button type="button" className="btn btn-primary btn-wide" onClick={save} disabled={!canSave}>
+        <button
+          type="button"
+          className="btn btn-primary btn-wide"
+          onClick={save}
+          disabled={!canSave}
+        >
           Speichern
         </button>
       </div>

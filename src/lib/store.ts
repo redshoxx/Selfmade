@@ -4,12 +4,14 @@ import { today, type IsoDate } from './date'
 export { live } from './entity'
 import { newId } from './id'
 import { isValidCents } from './money'
+import { NOTE_COLORS, alsTab, leseChecks } from './types'
 import type {
   AisleId,
   Category,
   Challenge,
   Entity,
   Note,
+  NoteColor,
   PantryItem,
   Pot,
   PotEntry,
@@ -35,19 +37,91 @@ const STORAGE_KEY = 'selfmade.state.v1'
 /* --- Startkategorien ------------------------------------------------------ */
 
 export const DEFAULT_CATEGORIES: readonly Category[] = [
-  { id: 'cat-lohn', name: 'Gehalt', emoji: '💼', kind: 'einnahme', budgetCents: null },
-  { id: 'cat-nebenjob', name: 'Nebenjob', emoji: '🧰', kind: 'einnahme', budgetCents: null },
-  { id: 'cat-geschenk', name: 'Geschenk', emoji: '🎁', kind: 'einnahme', budgetCents: null },
-  { id: 'cat-sonstiges-ein', name: 'Sonstiges', emoji: '➕', kind: 'einnahme', budgetCents: null },
+  {
+    id: 'cat-lohn',
+    name: 'Gehalt',
+    emoji: '💼',
+    kind: 'einnahme',
+    budgetCents: null,
+  },
+  {
+    id: 'cat-nebenjob',
+    name: 'Nebenjob',
+    emoji: '🧰',
+    kind: 'einnahme',
+    budgetCents: null,
+  },
+  {
+    id: 'cat-geschenk',
+    name: 'Geschenk',
+    emoji: '🎁',
+    kind: 'einnahme',
+    budgetCents: null,
+  },
+  {
+    id: 'cat-sonstiges-ein',
+    name: 'Sonstiges',
+    emoji: '➕',
+    kind: 'einnahme',
+    budgetCents: null,
+  },
 
-  { id: 'cat-lebensmittel', name: 'Lebensmittel', emoji: '🛒', kind: 'ausgabe', budgetCents: null },
-  { id: 'cat-wohnen', name: 'Wohnen', emoji: '🏠', kind: 'ausgabe', budgetCents: null },
-  { id: 'cat-mobilitaet', name: 'Mobilität', emoji: '🚌', kind: 'ausgabe', budgetCents: null },
-  { id: 'cat-freizeit', name: 'Freizeit', emoji: '🎬', kind: 'ausgabe', budgetCents: null },
-  { id: 'cat-gesundheit', name: 'Gesundheit', emoji: '💊', kind: 'ausgabe', budgetCents: null },
-  { id: 'cat-abos', name: 'Abos', emoji: '🔁', kind: 'ausgabe', budgetCents: null },
-  { id: 'cat-kleidung', name: 'Kleidung', emoji: '👕', kind: 'ausgabe', budgetCents: null },
-  { id: 'cat-sonstiges-aus', name: 'Sonstiges', emoji: '➖', kind: 'ausgabe', budgetCents: null },
+  {
+    id: 'cat-lebensmittel',
+    name: 'Lebensmittel',
+    emoji: '🛒',
+    kind: 'ausgabe',
+    budgetCents: null,
+  },
+  {
+    id: 'cat-wohnen',
+    name: 'Wohnen',
+    emoji: '🏠',
+    kind: 'ausgabe',
+    budgetCents: null,
+  },
+  {
+    id: 'cat-mobilitaet',
+    name: 'Mobilität',
+    emoji: '🚌',
+    kind: 'ausgabe',
+    budgetCents: null,
+  },
+  {
+    id: 'cat-freizeit',
+    name: 'Freizeit',
+    emoji: '🎬',
+    kind: 'ausgabe',
+    budgetCents: null,
+  },
+  {
+    id: 'cat-gesundheit',
+    name: 'Gesundheit',
+    emoji: '💊',
+    kind: 'ausgabe',
+    budgetCents: null,
+  },
+  {
+    id: 'cat-abos',
+    name: 'Abos',
+    emoji: '🔁',
+    kind: 'ausgabe',
+    budgetCents: null,
+  },
+  {
+    id: 'cat-kleidung',
+    name: 'Kleidung',
+    emoji: '👕',
+    kind: 'ausgabe',
+    budgetCents: null,
+  },
+  {
+    id: 'cat-sonstiges-aus',
+    name: 'Sonstiges',
+    emoji: '➖',
+    kind: 'ausgabe',
+    budgetCents: null,
+  },
 ]
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -99,7 +173,9 @@ export const SYNC_LISTS = [
 /** Gibt es seit `since` überhaupt etwas Neues? Sonst gar nicht erst fragen. */
 export function hasChangesSince(state: State, since: number): boolean {
   if (state.prefsUpdatedAt > since) return true
-  return SYNC_LISTS.some((key) => (state[key] as readonly Entity[]).some((item) => item.updatedAt > since))
+  return SYNC_LISTS.some((key) =>
+    (state[key] as readonly Entity[]).some((item) => item.updatedAt > since),
+  )
 }
 
 /* --- Änderungen ----------------------------------------------------------- */
@@ -109,13 +185,27 @@ export type Action =
   | { type: 'tx/update'; id: string; patch: Partial<Omit<Tx, keyof Entity>> }
   | { type: 'tx/remove'; id: string }
   | { type: 'category/add'; category: Omit<Category, 'id'> }
-  | { type: 'category/update'; id: string; patch: Partial<Omit<Category, 'id'>> }
+  | {
+      type: 'category/update'
+      id: string
+      patch: Partial<Omit<Category, 'id'>>
+    }
   | { type: 'category/remove'; id: string }
   | { type: 'pot/add'; pot: Omit<Pot, keyof Entity> }
   | { type: 'pot/update'; id: string; patch: Partial<Omit<Pot, keyof Entity>> }
   | { type: 'pot/remove'; id: string }
   | { type: 'potEntry/add'; entry: Omit<PotEntry, keyof Entity> }
   | { type: 'potEntry/remove'; id: string }
+  /**
+   * Geld zurücklegen – der eine Handgriff, um den es beim Sparen geht.
+   *
+   * `potId: null` heißt „noch kein Topf da“. Dann entsteht hier einer mit,
+   * denn seine Kennung fällt erst im Reducer an; die Ansicht könnte sie nicht
+   * mitgeben. Zwei getrennte Aktionen daraus zu machen hieße, dazwischen einen
+   * Zustand mit einem leeren Topf zu haben – und wenn die zweite ausbliebe,
+   * bliebe er leer stehen.
+   */
+  | { type: 'sparen/zuruecklegen'; cents: number; potId: string | null }
   | { type: 'challenge/add'; challenge: Omit<Challenge, keyof Entity> }
   /**
    * Challenge und zugehörigen Spartopf in einem Zug anlegen.
@@ -129,11 +219,19 @@ export type Action =
       challenge: Omit<Challenge, keyof Entity | 'potId'>
       pot: Omit<Pot, keyof Entity> | null
     }
-  | { type: 'challenge/update'; id: string; patch: Partial<Omit<Challenge, keyof Entity>> }
+  | {
+      type: 'challenge/update'
+      id: string
+      patch: Partial<Omit<Challenge, keyof Entity>>
+    }
   | { type: 'challenge/toggleSlot'; id: string; slot: number }
   | { type: 'challenge/remove'; id: string }
   | { type: 'shop/add'; item: Omit<ShopItem, keyof Entity> }
-  | { type: 'shop/update'; id: string; patch: Partial<Omit<ShopItem, keyof Entity>> }
+  | {
+      type: 'shop/update'
+      id: string
+      patch: Partial<Omit<ShopItem, keyof Entity>>
+    }
   | { type: 'shop/toggle'; id: string }
   | { type: 'shop/remove'; id: string }
   | { type: 'shop/clearDone' }
@@ -141,25 +239,59 @@ export type Action =
    * Einkauf abschließen. `inDenVorrat` nennt die Vorratsposten, die durch
    * diesen Einkauf hochzuzählen sind – berechnet von `vorratsZugaenge()`.
    */
-  | { type: 'shop/finishTrip'; order: AisleId[]; inDenVorrat: { pantryId: string; menge: number }[] }
+  | {
+      type: 'shop/finishTrip'
+      order: AisleId[]
+      inDenVorrat: { pantryId: string; menge: number }[]
+    }
   | { type: 'pantry/add'; item: Omit<PantryItem, keyof Entity> }
-  | { type: 'pantry/update'; id: string; patch: Partial<Omit<PantryItem, keyof Entity>> }
+  | {
+      type: 'pantry/update'
+      id: string
+      patch: Partial<Omit<PantryItem, keyof Entity>>
+    }
   | { type: 'pantry/remove'; id: string }
   /** Bestand auf 0 und in einem Zug auf die Einkaufsliste. */
   | { type: 'pantry/aufgebraucht'; id: string; addedBy: string }
   /** Neu Gekauftes in den Vorrat aufnehmen, beim Auspacken. */
   | {
       type: 'pantry/ausEinkauf'
-      items: { name: string; aisle: AisleId; qty: number; unit: string; bestBefore: IsoDate | null }[]
+      items: {
+        name: string
+        aisle: AisleId
+        qty: number
+        unit: string
+        bestBefore: IsoDate | null
+      }[]
     }
   | { type: 'note/add'; note: Omit<Note, keyof Entity> }
-  | { type: 'note/update'; id: string; patch: Partial<Omit<Note, keyof Entity>> }
+  | {
+      type: 'note/update'
+      id: string
+      patch: Partial<Omit<Note, keyof Entity>>
+    }
+  /**
+   * Genau einen Punkt einer Notiz abhaken.
+   *
+   * Eigene Aktion, statt die Ansicht die ganze `checks`-Liste zurückschreiben
+   * zu lassen: Hakt die andere Person zeitgleich einen anderen Punkt ab,
+   * überschriebe die zurückgeschriebene Liste deren Häkchen wieder.
+   */
+  | { type: 'note/toggleCheck'; id: string; checkId: string }
   | { type: 'note/remove'; id: string }
   | { type: 'template/add'; template: Omit<ShopTemplate, keyof Entity> }
-  | { type: 'template/update'; id: string; patch: Partial<Omit<ShopTemplate, keyof Entity>> }
+  | {
+      type: 'template/update'
+      id: string
+      patch: Partial<Omit<ShopTemplate, keyof Entity>>
+    }
   | { type: 'template/remove'; id: string }
   | { type: 'recurring/add'; rule: Omit<RecurringTx, keyof Entity> }
-  | { type: 'recurring/update'; id: string; patch: Partial<Omit<RecurringTx, keyof Entity>> }
+  | {
+      type: 'recurring/update'
+      id: string
+      patch: Partial<Omit<RecurringTx, keyof Entity>>
+    }
   | { type: 'recurring/remove'; id: string }
   /**
    * Fällige Buchungen einer Regel in einem Zug anlegen und `lastRun`
@@ -223,8 +355,6 @@ function tombstone<T extends Entity>(list: T[], id: string): T[] {
   return patchItem(list, id, { deletedAt: Date.now() } as Partial<T>)
 }
 
-
-
 /**
  * Gewichteter Mittelwert für die gelernte Ladenreihenfolge.
  *
@@ -270,7 +400,9 @@ export function reducer(state: State, action: Action): State {
     case 'category/update':
       return {
         ...state,
-        categories: state.categories.map((c) => (c.id === action.id ? { ...c, ...action.patch, id: c.id } : c)),
+        categories: state.categories.map((c) =>
+          c.id === action.id ? { ...c, ...action.patch, id: c.id } : c,
+        ),
         prefsUpdatedAt: Date.now(),
       }
     case 'category/remove': {
@@ -306,7 +438,9 @@ export function reducer(state: State, action: Action): State {
         // Einzahlungen eines gelöschten Topfes verschwinden mit ihm, sonst
         // zählte die Sparsumme Beträge mit, zu denen es kein Ziel mehr gibt.
         potEntries: state.potEntries.map((e) =>
-          e.potId === action.id && e.deletedAt === null ? { ...e, deletedAt: now, updatedAt: now } : e,
+          e.potId === action.id && e.deletedAt === null
+            ? { ...e, deletedAt: now, updatedAt: now }
+            : e,
         ),
         // Challenges, die in den Topf einzahlten, laufen ohne Topf weiter.
         challenges: state.challenges.map((c) =>
@@ -315,19 +449,68 @@ export function reducer(state: State, action: Action): State {
       }
     }
     case 'potEntry/add':
-      return { ...state, potEntries: [{ ...action.entry, ...stamp() }, ...state.potEntries] }
+      return {
+        ...state,
+        potEntries: [{ ...action.entry, ...stamp() }, ...state.potEntries],
+      }
     case 'potEntry/remove': {
       const potEntries = tombstone(state.potEntries, action.id)
       return potEntries === state.potEntries ? state : { ...state, potEntries }
     }
 
+    case 'sparen/zuruecklegen': {
+      if (!isValidCents(action.cents) || action.cents <= 0) return state
+
+      // Ist der genannte Topf inzwischen weg – gelöscht auf dem anderen Gerät,
+      // während das Blatt offen stand –, wird trotzdem zurückgelegt: in einen
+      // neuen. Den Betrag wegen eines fehlenden Behälters zu verwerfen wäre
+      // der schlechtere Ausgang.
+      const vorhanden = action.potId
+        ? state.pots.find((p) => p.id === action.potId && p.deletedAt === null)
+        : undefined
+
+      const neuerTopf: Pot | null = vorhanden
+        ? null
+        : {
+            name: 'Sparen',
+            emoji: '🐖',
+            targetCents: null,
+            targetDate: null,
+            ...stamp(),
+          }
+      const potId = vorhanden?.id ?? neuerTopf!.id
+
+      const entry: PotEntry = {
+        potId,
+        cents: action.cents,
+        date: today(),
+        note: '',
+        challengeId: null,
+        slot: null,
+        ...stamp(),
+      }
+
+      return {
+        ...state,
+        pots: neuerTopf ? [...state.pots, neuerTopf] : state.pots,
+        potEntries: [entry, ...state.potEntries],
+      }
+    }
+
     /* --- Challenges --- */
     case 'challenge/add':
-      return { ...state, challenges: [...state.challenges, { ...action.challenge, ...stamp() }] }
+      return {
+        ...state,
+        challenges: [...state.challenges, { ...action.challenge, ...stamp() }],
+      }
 
     case 'challenge/start': {
       const pot = action.pot ? { ...action.pot, ...stamp() } : null
-      const challenge: Challenge = { ...action.challenge, ...stamp(), potId: pot?.id ?? null }
+      const challenge: Challenge = {
+        ...action.challenge,
+        ...stamp(),
+        potId: pot?.id ?? null,
+      }
       return {
         ...state,
         pots: pot ? [...state.pots, pot] : state.pots,
@@ -393,7 +576,10 @@ export function reducer(state: State, action: Action): State {
 
     /* --- Einkauf --- */
     case 'shop/add':
-      return { ...state, shopItems: [{ ...action.item, ...stamp() }, ...state.shopItems] }
+      return {
+        ...state,
+        shopItems: [{ ...action.item, ...stamp() }, ...state.shopItems],
+      }
     case 'shop/update': {
       const shopItems = patchItem(state.shopItems, action.id, action.patch)
       return shopItems === state.shopItems ? state : { ...state, shopItems }
@@ -401,7 +587,10 @@ export function reducer(state: State, action: Action): State {
     case 'shop/toggle': {
       const item = state.shopItems.find((i) => i.id === action.id)
       if (!item) return state
-      return { ...state, shopItems: patchItem(state.shopItems, action.id, { done: !item.done }) }
+      return {
+        ...state,
+        shopItems: patchItem(state.shopItems, action.id, { done: !item.done }),
+      }
     }
     case 'shop/remove': {
       const shopItems = tombstone(state.shopItems, action.id)
@@ -434,7 +623,11 @@ export function reducer(state: State, action: Action): State {
           if (menge === undefined || item.deletedAt !== null) return item
           // Auf zwei Nachkommastellen: „0,5 kg“ dreimal ergäbe sonst
           // 1.5000000000000002.
-          return { ...item, qty: Math.round((item.qty + menge) * 100) / 100, updatedAt: now }
+          return {
+            ...item,
+            qty: Math.round((item.qty + menge) * 100) / 100,
+            updatedAt: now,
+          }
         }),
         shopItems: state.shopItems.map((i) =>
           i.done && i.deletedAt === null ? { ...i, deletedAt: now, updatedAt: now } : i,
@@ -444,7 +637,10 @@ export function reducer(state: State, action: Action): State {
 
     /* --- Vorrat --- */
     case 'pantry/add':
-      return { ...state, pantryItems: [{ ...action.item, ...stamp() }, ...state.pantryItems] }
+      return {
+        ...state,
+        pantryItems: [{ ...action.item, ...stamp() }, ...state.pantryItems],
+      }
     case 'pantry/update': {
       const pantryItems = patchItem(state.pantryItems, action.id, action.patch)
       return pantryItems === state.pantryItems ? state : { ...state, pantryItems }
@@ -470,14 +666,18 @@ export function reducer(state: State, action: Action): State {
       const posten = state.pantryItems.find((i) => i.id === action.id && i.deletedAt === null)
       if (!posten) return state
 
-      const pantryItems = patchItem(state.pantryItems, action.id, { qty: 0, bestBefore: null })
+      const pantryItems = patchItem(state.pantryItems, action.id, {
+        qty: 0,
+        bestBefore: null,
+      })
 
       // Steht es schon auf der Liste, bleibt es bei dem einen Eintrag – zwei
       // Zeilen „Milch“ helfen im Laden niemandem.
       const schonDrauf = state.shopItems.some(
         (i) =>
           i.deletedAt === null &&
-          (i.pantryId === posten.id || i.name.trim().toLowerCase() === posten.name.trim().toLowerCase()),
+          (i.pantryId === posten.id ||
+            i.name.trim().toLowerCase() === posten.name.trim().toLowerCase()),
       )
       if (schonDrauf) return { ...state, pantryItems }
 
@@ -511,10 +711,20 @@ export function reducer(state: State, action: Action): State {
 
     /* --- Notizen --- */
     case 'note/add':
-      return { ...state, notes: [{ ...action.note, ...stamp() }, ...state.notes] }
+      return {
+        ...state,
+        notes: [{ ...action.note, ...stamp() }, ...state.notes],
+      }
     case 'note/update': {
       const notes = patchItem(state.notes, action.id, action.patch)
       return notes === state.notes ? state : { ...state, notes }
+    }
+    case 'note/toggleCheck': {
+      const note = state.notes.find((n) => n.id === action.id && n.deletedAt === null)
+      if (!note) return state
+      if (!note.checks.some((c) => c.id === action.checkId)) return state
+      const checks = note.checks.map((c) => (c.id === action.checkId ? { ...c, done: !c.done } : c))
+      return { ...state, notes: patchItem(state.notes, action.id, { checks }) }
     }
     case 'note/remove': {
       const notes = tombstone(state.notes, action.id)
@@ -523,7 +733,10 @@ export function reducer(state: State, action: Action): State {
 
     /* --- Einkaufs-Vorlagen --- */
     case 'template/add':
-      return { ...state, shopTemplates: [...state.shopTemplates, { ...action.template, ...stamp() }] }
+      return {
+        ...state,
+        shopTemplates: [...state.shopTemplates, { ...action.template, ...stamp() }],
+      }
     case 'template/update': {
       const shopTemplates = patchItem(state.shopTemplates, action.id, action.patch)
       return shopTemplates === state.shopTemplates ? state : { ...state, shopTemplates }
@@ -535,7 +748,10 @@ export function reducer(state: State, action: Action): State {
 
     /* --- Wiederkehrende Buchungen --- */
     case 'recurring/add':
-      return { ...state, recurringTxs: [...state.recurringTxs, { ...action.rule, ...stamp() }] }
+      return {
+        ...state,
+        recurringTxs: [...state.recurringTxs, { ...action.rule, ...stamp() }],
+      }
     case 'recurring/update': {
       const recurringTxs = patchItem(state.recurringTxs, action.id, action.patch)
       return recurringTxs === state.recurringTxs ? state : { ...state, recurringTxs }
@@ -563,7 +779,9 @@ export function reducer(state: State, action: Action): State {
       return {
         ...state,
         txs: [...fresh, ...state.txs],
-        recurringTxs: patchItem(state.recurringTxs, action.id, { lastRun: latest }),
+        recurringTxs: patchItem(state.recurringTxs, action.id, {
+          lastRun: latest,
+        }),
       }
     }
 
@@ -584,7 +802,11 @@ export function reducer(state: State, action: Action): State {
 
     /* --- Rahmen --- */
     case 'settings/update':
-      return { ...state, settings: { ...state.settings, ...action.patch }, prefsUpdatedAt: Date.now() }
+      return {
+        ...state,
+        settings: { ...state.settings, ...action.patch },
+        prefsUpdatedAt: Date.now(),
+      }
     case 'sync/merge':
       return mergeState(state, action.incoming)
     case 'state/replace':
@@ -652,7 +874,10 @@ export function mergeState(state: State, incoming: Partial<State>): State {
     notes: mergeList(state.notes, incoming.notes),
     shopTemplates: mergeList(state.shopTemplates, incoming.shopTemplates),
     categories: prefsNeuer && incoming.categories?.length ? incoming.categories : state.categories,
-    settings: prefsNeuer && incoming.settings ? { ...state.settings, ...incoming.settings } : state.settings,
+    settings:
+      prefsNeuer && incoming.settings
+        ? { ...state.settings, ...incoming.settings }
+        : state.settings,
     aisleOrder: { ...state.aisleOrder, ...incoming.aisleOrder },
   }
 }
@@ -723,9 +948,22 @@ export function loadState(raw: string | null): State {
 
   const state: State = {
     ...base,
-    txs: list<Tx>('txs', (i) => isValidCents(i.cents) && i.cents >= 0 && text(i.date) && (i.kind === 'einnahme' || i.kind === 'ausgabe')),
-    pots: list<Pot>('pots', (i) => text(i.name) && (i.targetCents === null || isValidCents(i.targetCents))),
-    potEntries: list<PotEntry>('potEntries', (i) => isValidCents(i.cents) && text(i.potId) && text(i.date)),
+    txs: list<Tx>(
+      'txs',
+      (i) =>
+        isValidCents(i.cents) &&
+        i.cents >= 0 &&
+        text(i.date) &&
+        (i.kind === 'einnahme' || i.kind === 'ausgabe'),
+    ),
+    pots: list<Pot>(
+      'pots',
+      (i) => text(i.name) && (i.targetCents === null || isValidCents(i.targetCents)),
+    ),
+    potEntries: list<PotEntry>(
+      'potEntries',
+      (i) => isValidCents(i.cents) && text(i.potId) && text(i.date),
+    ),
     challenges: list<Challenge>(
       'challenges',
       (i) =>
@@ -762,14 +1000,26 @@ export function loadState(raw: string | null): State {
         priceCents: isValidCents(i.priceCents) ? (i.priceCents as number) : null,
       }),
     ),
-    pantryItems: list<PantryItem>('pantryItems', (i) => text(i.name) && num(i.qty), (i) => ({
-      note: text(i.note) ? (i.note as string) : '',
-    })),
-    notes: list<Note>('notes', (i) => text(i.title) || text(i.body), (i) => ({
-      title: text(i.title) ? (i.title as string) : '',
-      body: text(i.body) ? (i.body as string) : '',
-      pinned: i.pinned === true,
-    })),
+    pantryItems: list<PantryItem>(
+      'pantryItems',
+      (i) => text(i.name) && num(i.qty),
+      (i) => ({
+        note: text(i.note) ? (i.note as string) : '',
+      }),
+    ),
+    // Eine Notiz zählt auch dann, wenn nur Häkchen drinstehen – eine
+    // Packliste ohne Titel und ohne Fließtext ist eine gültige Notiz.
+    notes: list<Note>(
+      'notes',
+      (i) => text(i.title) || text(i.body) || (Array.isArray(i.checks) && i.checks.length > 0),
+      (i) => ({
+        title: text(i.title) ? (i.title as string) : '',
+        body: text(i.body) ? (i.body as string) : '',
+        pinned: i.pinned === true,
+        color: NOTE_COLORS.includes(i.color as NoteColor) ? (i.color as NoteColor) : 'keine',
+        checks: leseChecks(i.checks),
+      }),
+    ),
     shopTemplates: list<ShopTemplate>(
       'shopTemplates',
       (i) => text(i.name) && Array.isArray(i.items),
@@ -777,7 +1027,11 @@ export function loadState(raw: string | null): State {
         emoji: text(i.emoji) ? (i.emoji as string) : '🛒',
         items: (i.items as unknown[])
           .filter((entry): entry is Record<string, unknown> => {
-            return !!entry && typeof entry === 'object' && typeof (entry as Record<string, unknown>).name === 'string'
+            return (
+              !!entry &&
+              typeof entry === 'object' &&
+              typeof (entry as Record<string, unknown>).name === 'string'
+            )
           })
           .map((entry) => ({
             name: entry.name as string,
@@ -793,7 +1047,11 @@ export function loadState(raw: string | null): State {
   state.challenges = state.challenges.map((c) => ({
     ...c,
     filled: Array.from(
-      new Set((c.filled as unknown[]).filter((s): s is number => Number.isInteger(s) && (s as number) >= 0 && (s as number) < c.slots)),
+      new Set(
+        (c.filled as unknown[]).filter(
+          (s): s is number => Number.isInteger(s) && (s as number) >= 0 && (s as number) < c.slots,
+        ),
+      ),
     ).sort((a, b) => a - b),
   }))
 
@@ -823,12 +1081,12 @@ export function loadState(raw: string | null): State {
   if (data.settings && typeof data.settings === 'object') {
     const s = data.settings as Record<string, unknown>
     state.settings = {
-      displayName: typeof s.displayName === 'string' && s.displayName.trim() ? s.displayName : DEFAULT_SETTINGS.displayName,
+      displayName:
+        typeof s.displayName === 'string' && s.displayName.trim()
+          ? s.displayName
+          : DEFAULT_SETTINGS.displayName,
       theme: s.theme === 'hell' || s.theme === 'dunkel' ? s.theme : 'system',
-      startTab:
-        s.startTab === 'geld' || s.startTab === 'sparen' || s.startTab === 'einkauf' || s.startTab === 'vorrat'
-          ? s.startTab
-          : 'start',
+      startTab: alsTab(s.startTab) ?? DEFAULT_SETTINGS.startTab,
       haptics: typeof s.haptics === 'boolean' ? s.haptics : true,
     }
   }

@@ -1,3 +1,4 @@
+import { alsTab } from './types'
 import type { Tab } from './types'
 
 /**
@@ -12,8 +13,6 @@ export interface LaunchIntent {
   filter: 'ablauf' | null
 }
 
-const TABS: readonly Tab[] = ['start', 'geld', 'sparen', 'einkauf', 'vorrat']
-
 /**
  * Startabsicht aus der Adresse lesen.
  *
@@ -24,10 +23,12 @@ const TABS: readonly Tab[] = ['start', 'geld', 'sparen', 'einkauf', 'vorrat']
  */
 export function readLaunchIntent(search: string = window.location.search): LaunchIntent {
   const params = new URLSearchParams(search)
-  const tab = params.get('tab')
   const neu = params.get('neu')
   return {
-    tab: TABS.includes(tab as Tab) ? (tab as Tab) : null,
+    // `alsTab` fängt hier das alte `?tab=sparen` ab: Es steckt in den
+    // Verknüpfungen, die schon auf einem Home-Bildschirm liegen, und die
+    // aktualisiert niemand.
+    tab: alsTab(params.get('tab')),
     compose: neu === 'ausgabe' || neu === 'einnahme' ? neu : null,
     filter: params.get('filter') === 'ablauf' ? 'ablauf' : null,
   }
@@ -51,11 +52,18 @@ export function clearLaunchIntent(): void {
 }
 
 /**
- * Höhe der eingeblendeten Tastatur als CSS-Variable.
+ * Höhe der eingeblendeten Tastatur als CSS-Variable, und eine Klasse dazu.
  *
  * Auf iOS schiebt die Tastatur das Layout nicht nach oben, sondern legt sich
  * darüber – die Eingabezeile am unteren Rand läge sonst dahinter und man tippt
  * blind. `visualViewport` verrät, wie viel fehlt.
+ *
+ * Die Klasse `tastatur` auf `<html>` ist der zweite Teil, und ohne ihn stimmt
+ * die Rechnung nicht: Die Reiterleiste steht unter der Eingabezeile und behält
+ * ihre 83 Punkte, auch wenn sie längst hinter der Tastatur liegt. Die
+ * Eingabezeile schwebte dadurch genau diese 83 Punkte über der Tastaturkante.
+ * Das Stylesheet nimmt die Leiste anhand der Klasse aus dem Fluss – so, wie
+ * eine echte App es auch macht.
  */
 export function trackKeyboardInset(): () => void {
   const viewport = window.visualViewport
@@ -67,6 +75,7 @@ export function trackKeyboardInset(): () => void {
     // Tastatur. Erst ab 80 Pixeln ist wirklich eine aufgegangen.
     const inset = hidden > 80 ? hidden : 0
     document.documentElement.style.setProperty('--keyboard', `${Math.round(inset)}px`)
+    document.documentElement.classList.toggle('tastatur', inset > 0)
   }
 
   update()
@@ -76,6 +85,7 @@ export function trackKeyboardInset(): () => void {
     viewport.removeEventListener('resize', update)
     viewport.removeEventListener('scroll', update)
     document.documentElement.style.setProperty('--keyboard', '0px')
+    document.documentElement.classList.remove('tastatur')
   }
 }
 

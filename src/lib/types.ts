@@ -1,4 +1,5 @@
 import type { IsoDate } from './date'
+import { newId } from './id'
 
 /**
  * Datenmodell.
@@ -14,7 +15,34 @@ import type { IsoDate } from './date'
  * Wer zusammen einkauft, muss dafür nicht sein Gehalt offenlegen.
  */
 
-export type Tab = 'start' | 'geld' | 'sparen' | 'einkauf' | 'vorrat'
+/**
+ * Die fünf Orte der App.
+ *
+ * Fünf, weil ein iPhone 12 nur 390 Punkte breit ist: Bei sechs Reitern bleiben
+ * je 65 Punkte, und „Einkauf“ passt dort nicht mehr in eine Zeile. Sparen ist
+ * deshalb kein eigener Ort mehr, sondern ein Bereich innerhalb von `geld` –
+ * dort, wo das Geld ohnehin liegt.
+ */
+export type Tab = 'start' | 'geld' | 'einkauf' | 'vorrat' | 'notizen'
+
+export const TABS: readonly Tab[] = ['start', 'geld', 'einkauf', 'vorrat', 'notizen']
+
+/**
+ * Einen gespeicherten oder übergebenen Wert als Reiter deuten.
+ *
+ * Steht hier neben dem Typ und nicht dreimal verteilt: Gespeicherter Zustand,
+ * Serverstand und Startadresse prüfen alle denselben Wert, und als sich die
+ * Liste geändert hat, hätten drei Stellen mitziehen müssen.
+ *
+ * `sparen` ist der Sonderfall: Es war einmal ein eigener Reiter und steckt
+ * noch in gespeicherten Einstellungen, alten Lesezeichen und den Verknüpfungen
+ * auf dem Home-Bildschirm. Es führt jetzt nach `geld` – dort liegt das Sparen.
+ * Auf `start` zurückzufallen wäre die bequemere, aber falsche Antwort.
+ */
+export function alsTab(wert: unknown): Tab | null {
+  if (wert === 'sparen') return 'geld'
+  return TABS.includes(wert as Tab) ? (wert as Tab) : null
+}
 
 /** Alles, was gespeichert und abgeglichen wird, trägt diese Felder. */
 export interface Entity {
@@ -151,12 +179,57 @@ export interface PantryItem extends Entity {
   note: string
 }
 
+/** Ein Punkt zum Abhaken innerhalb einer Notiz. */
+export interface NoteCheck {
+  id: string
+  text: string
+  done: boolean
+}
+
+/**
+ * Farbe einer Notiz.
+ *
+ * Als Namen statt als Farbwerte gespeichert: Die Notiz überlebt damit einen
+ * Themenwechsel. Ein festes `#ffe08a` wäre im dunklen Thema eine Leuchtreklame.
+ */
+export type NoteColor = 'keine' | 'gelb' | 'gruen' | 'blau' | 'rot' | 'lila'
+
+export const NOTE_COLORS: readonly NoteColor[] = ['keine', 'gelb', 'gruen', 'blau', 'rot', 'lila']
+
+/**
+ * Häkchenpunkte misstrauisch lesen.
+ *
+ * Sie kommen aus zwei Richtungen – aus dem Speicher des Browsers und als JSON
+ * aus der Datenbank –, und beide können Unfug enthalten: eine ältere Fassung,
+ * ein halb geschriebener Datensatz, ein Feld von Hand geändert. Was nicht
+ * passt, fliegt raus, statt den ganzen Abgleich scheitern zu lassen. Fehlt nur
+ * die Kennung, bekommt der Punkt eine neue – ihn wegzuwerfen hieße, jemandem
+ * eine Zeile seiner Packliste zu löschen.
+ */
+export function leseChecks(roh: unknown): NoteCheck[] {
+  if (!Array.isArray(roh)) return []
+  return roh
+    .filter((e): e is Record<string, unknown> => !!e && typeof e === 'object')
+    .map((e) => ({
+      id: typeof e.id === 'string' && e.id ? e.id : newId(),
+      text: typeof e.text === 'string' ? e.text : '',
+      done: e.done === true,
+    }))
+    .filter((e) => e.text.trim() !== '')
+}
+
 /** Ein Zettel am Kühlschrank – für alles, was keine Einkaufsliste ist. */
 export interface Note extends Entity {
   title: string
   body: string
   /** Angeheftete Notizen stehen oben. */
   pinned: boolean
+  color: NoteColor
+  /**
+   * Abhakbare Punkte – Packliste, Rezeptschritte, „wer bringt was mit“.
+   * Leer, solange die Notiz reiner Text ist.
+   */
+  checks: NoteCheck[]
 }
 
 export interface TemplateItem {

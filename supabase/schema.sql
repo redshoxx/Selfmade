@@ -154,6 +154,12 @@ create table if not exists public.notes (
   title      text not null default '',
   body       text not null default '',
   pinned     boolean not null default false,
+  -- Name statt Farbwert: Die Notiz überlebt damit einen Themenwechsel. Ein
+  -- festes '#ffe08a' wäre im dunklen Thema eine Leuchtreklame.
+  color      text not null default 'keine',
+  -- Punkte zum Abhaken – Packliste, Rezeptschritte. Als JSON, weil sie immer
+  -- vollständig gelesen und geschrieben werden, nie einzeln abgefragt.
+  checks     jsonb not null default '[]'::jsonb,
   updated_at bigint not null,
   deleted_at bigint
 );
@@ -360,6 +366,8 @@ drop function if exists public.is_household_member(uuid);
 alter table public.shop_items   add column if not exists note text not null default '';
 alter table public.shop_items   add column if not exists price_cents bigint;
 alter table public.pantry_items add column if not exists note text not null default '';
+alter table public.notes        add column if not exists color text not null default 'keine';
+alter table public.notes        add column if not exists checks jsonb not null default '[]'::jsonb;
 
 -- ---------------------------------------------------------------------------
 --  Zeilenschutz

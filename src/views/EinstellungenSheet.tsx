@@ -4,7 +4,16 @@ import { IconUsers } from '../components/Icons'
 import { Sheet } from '../components/Sheet'
 import { cloudConfigured } from '../lib/supabase'
 import { useApp } from '../lib/useApp'
-import type { Settings } from '../lib/types'
+import { TABS } from '../lib/types'
+import type { Settings, Tab } from '../lib/types'
+
+const TAB_NAMEN: Record<Tab, string> = {
+  start: 'Start',
+  geld: 'Geld',
+  einkauf: 'Einkauf',
+  vorrat: 'Vorrat',
+  notizen: 'Notizen',
+}
 
 /**
  * Einstellungen.
@@ -13,7 +22,13 @@ import type { Settings } from '../lib/types'
  * ist kein Schalter, sondern ein Weg über mehrere Schritte – zwischen Farbwahl
  * und Anzeigename stand er im Weg und wirkte zugleich wie eine Kleinigkeit.
  */
-export function EinstellungenSheet({ onClose, onKonto }: { onClose: () => void; onKonto: () => void }) {
+export function EinstellungenSheet({
+  onClose,
+  onKonto,
+}: {
+  onClose: () => void
+  onKonto: () => void
+}) {
   const { state, dispatch, session, cloudStatus, zugang } = useApp()
 
   const [name, setName] = useState(state.settings.displayName)
@@ -31,7 +46,12 @@ export function EinstellungenSheet({ onClose, onKonto }: { onClose: () => void; 
   return (
     <Sheet title="Einstellungen" onClose={onClose}>
       <div className="card" style={{ marginTop: 0 }}>
-        <TapRow title="Konto" sub={kontoStand} leading={<IconUsers size={18} />} onClick={onKonto} />
+        <TapRow
+          title="Konto"
+          sub={kontoStand}
+          leading={<IconUsers size={18} />}
+          onClick={onKonto}
+        />
       </div>
 
       {cloudStatus === 'fehler' && (
@@ -73,6 +93,24 @@ export function EinstellungenSheet({ onClose, onKonto }: { onClose: () => void; 
           ))}
         </div>
 
+        {/* Diese Einstellung wurde gespeichert, abgeglichen und beim Start
+            gelesen – nur einstellen ließ sie sich nirgends. */}
+        <div style={{ marginTop: 16 }}>
+          <Field label="Womit die App aufgeht">
+            <select
+              className="select"
+              value={state.settings.startTab}
+              onChange={(event) => set({ startTab: event.target.value as Tab })}
+            >
+              {TABS.map((tab) => (
+                <option key={tab} value={tab}>
+                  {TAB_NAMEN[tab]}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+
         <div className="spread" style={{ marginTop: 16 }}>
           <span>
             Kurzes Rütteln beim Abhaken
@@ -95,7 +133,8 @@ export function EinstellungenSheet({ onClose, onKonto }: { onClose: () => void; 
           zu fragen, ob sie dasselbe tun. */}
 
       <p className="small muted" style={{ marginTop: 18, textAlign: 'center' }}>
-        Deine Daten liegen auf diesem Gerät und auf deinem eigenen Supabase-Projekt – sonst nirgends.
+        Deine Daten liegen auf diesem Gerät und auf deinem eigenen Supabase-Projekt – sonst
+        nirgends.
       </p>
     </Sheet>
   )

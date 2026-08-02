@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react'
-import { IconGear } from './components/Icons'
 import { TabBar } from './components/TabBar'
 import { pantryCounts } from './lib/pantry'
 import { clearLaunchIntent, readLaunchIntent, trackKeyboardInset } from './lib/platform'
@@ -9,8 +8,8 @@ import type { Tab, TxKind } from './lib/types'
 import { EinkaufView } from './views/EinkaufView'
 import { EinstellungenSheet } from './views/EinstellungenSheet'
 import { GeldView } from './views/GeldView'
-import { SparenView } from './views/SparenView'
 import { KontoSheet } from './views/KontoSheet'
+import { NotizenView } from './views/NotizenView'
 import { StartView } from './views/StartView'
 import { VorratView } from './views/VorratView'
 
@@ -24,7 +23,9 @@ import { VorratView } from './views/VorratView'
  */
 export interface GoIntent {
   compose?: TxKind
-  /** Im Sparen-Bereich gleich die Challenge-Auswahl zeigen. */
+  /** In Geld gleich den Spar-Bereich zeigen statt des Monats. */
+  sparen?: boolean
+  /** Dort zusätzlich die Challenge-Auswahl aufmachen. */
   challenge?: boolean
 }
 
@@ -65,31 +66,24 @@ export function App() {
           landet man in der neuen Ansicht mittendrin. Er sorgt zugleich dafür,
           dass die Absicht oben beim Aufbau gelesen wird. */}
       <main style={{ display: 'contents' }} key={tab}>
-        {tab === 'start' && <StartView onGo={goTo} onKonto={() => setKontoOpen(true)} />}
-        {tab === 'geld' && <GeldView startCompose={go.compose ?? null} />}
-        {tab === 'sparen' && <SparenView startPicking={go.challenge} />}
+        {tab === 'start' && (
+          <StartView
+            onGo={goTo}
+            onKonto={() => setKontoOpen(true)}
+            onEinstellungen={() => setSettingsOpen(true)}
+          />
+        )}
+        {tab === 'geld' && (
+          <GeldView
+            startCompose={go.compose ?? null}
+            startBereich={go.sparen || go.challenge ? 'sparen' : 'monat'}
+            startPicking={go.challenge}
+          />
+        )}
         {tab === 'einkauf' && <EinkaufView />}
         {tab === 'vorrat' && <VorratView startFilter={intent.filter ?? undefined} />}
+        {tab === 'notizen' && <NotizenView />}
       </main>
-
-      <button
-        type="button"
-        onClick={() => setSettingsOpen(true)}
-        aria-label="Einstellungen"
-        style={{
-          position: 'fixed',
-          top: 'calc(var(--safe-t) + 10px)',
-          right: 'calc(var(--safe-r) + 14px)',
-          width: 40,
-          height: 40,
-          display: 'grid',
-          placeItems: 'center',
-          color: 'var(--text-2)',
-          zIndex: 10,
-        }}
-      >
-        <IconGear size={21} />
-      </button>
 
       <TabBar active={tab} counts={counts} onChange={(next) => goTo(next)} />
 
