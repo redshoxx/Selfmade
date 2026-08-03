@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 
 /**
@@ -22,5 +22,17 @@ export default defineConfig({
   build: {
     // Ältere Safari-Versionen auf noch gepflegten iPhones sollen die Bundles lesen können.
     target: ['es2020', 'safari15'],
+  },
+  test: {
+    /*
+     * Vitest stubt CSS-Importe standardmäßig zu einem leeren String – für
+     * Rechenlogik ist das richtig, denn Stile interessieren dort nicht.
+     *
+     * `kontrast.test.ts` braucht sie aber: Er liest die Farbwerte aus
+     * `styles.css` und rechnet die Kontrastverhältnisse nach, statt sie in
+     * einem Kommentar zu behaupten, der altert. Ohne diese Zeile bekäme er
+     * eine leere Datei und würde stumm nichts prüfen.
+     */
+    css: true,
   },
 })

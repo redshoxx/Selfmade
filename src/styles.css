@@ -15,22 +15,39 @@
    =========================================================================== */
 
 :root {
-  --l-bg: #f7f7f5;
+  /* Werte aus dem Entwurf (Option 1b). Der Grund ist wärmer als zuvor und
+     hebt sich deutlicher von der weißen Karte ab: 1,11 statt 1,04. Der Akzent
+     wandert von einem hellen Blau ins Indigo und gewinnt dabei Kontrast –
+     5,6 : 1 statt 3,9 : 1 auf der Karte. */
+  --l-bg: #f4f3ef;
   --l-surface: #ffffff;
-  --l-surface-2: #eeeeeb;
-  --l-text: #16161a;
-  --l-text-2: #6c6c76;
-  --l-text-3: #a0a0aa;
-  --l-line: #e5e5e0;
-  --l-accent: #3d7bf7;
+  --l-surface-2: #f2f1ec;
+  --l-text: #14141a;
+  --l-text-2: #6b6b74;
+  --l-text-3: #8b8b95;
+  --l-line: #e8e6e0;
+  --l-accent: #4a5bd6;
   --l-accent-2: #7c5cf0;
-  --l-accent-soft: rgba(61, 123, 247, 0.12);
-  --l-good: #1f9d55;
-  --l-good-soft: rgba(31, 157, 85, 0.13);
-  --l-warn: #d98218;
-  --l-warn-soft: rgba(217, 130, 24, 0.14);
-  --l-bad: #e0453c;
-  --l-bad-soft: rgba(224, 69, 60, 0.12);
+  --l-accent-soft: rgba(74, 91, 214, 0.12);
+  --l-good: #17915a;
+  --l-good-soft: rgba(23, 145, 90, 0.13);
+  --l-warn: #c2760f;
+  --l-warn-soft: rgba(194, 118, 15, 0.14);
+  --l-bad: #d93f36;
+  --l-bad-soft: rgba(217, 63, 54, 0.12);
+
+  /*
+   * Dieselben drei Farben, dunkler – für kleine Schrift.
+   *
+   * Die Werte oben sind auf Flächen und Symbole hin gewählt und liegen auf
+   * Weiß bei 4,0 (good), 3,6 (warn) und 4,5 (bad) zu 1. Für ein Symbol oder
+   * einen Balken reicht das; für 13-px-Text in einem Hinweis nicht. Die App
+   * benutzt sie aber genau dafür. Also nicht den Entwurf verbiegen, sondern
+   * einen Zwilling danebenlegen: kaum zu unterscheiden, aber lesbar.
+   */
+  --l-good-text: #158552;
+  --l-warn-text: #aa670d;
+  --l-bad-text: #c73931;
   --l-shadow: 0 1px 2px rgba(20, 20, 30, 0.05), 0 8px 24px rgba(20, 20, 30, 0.06);
 
   /* Die dunklen Werte sind nachgerechnet, nicht geschätzt. Maßgeblich ist der
@@ -44,26 +61,42 @@
 
      Grund und Karte liegen weiter auseinander als zuvor (1,21 statt 1,09), damit
      Karten auf einem OLED-Bildschirm nicht mit dem Hintergrund verschmelzen. */
-  --d-bg: #0d0d0f;
-  --d-surface: #212127;
-  --d-surface-2: #2c2c33;
+  --d-bg: #0f0f12;
+  --d-surface: #1b1b20;
+  --d-surface-2: #26262c;
   --d-text: #f1f1f3;
   --d-text-2: #a2a2ab;
-  --d-text-3: #8b8b94;
-  --d-line: #33333a;
-  --d-accent: #5f90ff;
+  --d-text-3: #8b8b95;
+  --d-line: #2f2f37;
+  --d-accent: #7b8cff;
   --d-accent-2: #9b81ff;
-  --d-accent-soft: rgba(95, 144, 255, 0.17);
+  --d-accent-soft: rgba(123, 140, 255, 0.16);
   --d-good: #3fc47c;
   --d-good-soft: rgba(63, 196, 124, 0.16);
   --d-warn: #f0a83c;
   --d-warn-soft: rgba(240, 168, 60, 0.16);
   --d-bad: #ff6259;
   --d-bad-soft: rgba(255, 98, 89, 0.15);
+  /* Im Dunkeln tragen die drei schon bei kleiner Schrift (5,8 bis 8,5 : 1) –
+     der Zwilling ist hier derselbe Wert, damit die Regeln gleich aussehen. */
+  --d-good-text: #3fc47c;
+  --d-warn-text: #f0a83c;
+  --d-bad-text: #ff6259;
   --d-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.35);
 
-  --radius: 18px;
-  --radius-sm: 12px;
+  /*
+   * Gestaffelte Radien aus dem Entwurf.
+   *
+   * Vorher gab es zwei Werte für alles. Eine Staffel trägt eine Aussage: Je
+   * größer die Fläche, desto runder die Ecke – sonst wirkt ein kleiner Chip
+   * mit demselben Radius wie eine Karte gestaucht und die Karte kantig.
+   */
+  --radius-xl: 22px; /* die große Karte oben auf einer Seite */
+  --radius: 18px; /* gewöhnliche Karte, Liste */
+  --radius-md: 15px; /* Kachel */
+  --radius-sm: 14px; /* Knopf, Eingabefeld */
+  --radius-chip: 11px;
+  --radius-bar: 3px;
   /* Notch, Home-Indikator und abgerundete Ecken. Ohne diese Abstände klebt der
      Inhalt auf dem iPhone an den Kanten und liegt unter der Statusleiste. */
   --safe-t: env(safe-area-inset-top, 0px);
@@ -109,10 +142,13 @@
   --accent-soft: var(--l-accent-soft);
   --good: var(--l-good);
   --good-soft: var(--l-good-soft);
+  --good-text: var(--l-good-text);
   --warn: var(--l-warn);
   --warn-soft: var(--l-warn-soft);
+  --warn-text: var(--l-warn-text);
   --bad: var(--l-bad);
   --bad-soft: var(--l-bad-soft);
+  --bad-text: var(--l-bad-text);
   --shadow: var(--l-shadow);
   color-scheme: light;
 }
@@ -131,10 +167,13 @@
     --accent-soft: var(--d-accent-soft);
     --good: var(--d-good);
     --good-soft: var(--d-good-soft);
+    --good-text: var(--d-good-text);
     --warn: var(--d-warn);
     --warn-soft: var(--d-warn-soft);
+    --warn-text: var(--d-warn-text);
     --bad: var(--d-bad);
     --bad-soft: var(--d-bad-soft);
+    --bad-text: var(--d-bad-text);
     --shadow: var(--d-shadow);
     color-scheme: dark;
   }
@@ -153,10 +192,13 @@
   --accent-soft: var(--l-accent-soft);
   --good: var(--l-good);
   --good-soft: var(--l-good-soft);
+  --good-text: var(--l-good-text);
   --warn: var(--l-warn);
   --warn-soft: var(--l-warn-soft);
+  --warn-text: var(--l-warn-text);
   --bad: var(--l-bad);
   --bad-soft: var(--l-bad-soft);
+  --bad-text: var(--l-bad-text);
   --shadow: var(--l-shadow);
   color-scheme: light;
 }
@@ -174,10 +216,13 @@
   --accent-soft: var(--d-accent-soft);
   --good: var(--d-good);
   --good-soft: var(--d-good-soft);
+  --good-text: var(--d-good-text);
   --warn: var(--d-warn);
   --warn-soft: var(--d-warn-soft);
+  --warn-text: var(--d-warn-text);
   --bad: var(--d-bad);
   --bad-soft: var(--d-bad-soft);
+  --bad-text: var(--d-bad-text);
   --shadow: var(--d-shadow);
   color-scheme: dark;
 }
@@ -195,10 +240,13 @@
   --accent-soft: var(--l-accent-soft);
   --good: var(--l-good);
   --good-soft: var(--l-good-soft);
+  --good-text: var(--l-good-text);
   --warn: var(--l-warn);
   --warn-soft: var(--l-warn-soft);
+  --warn-text: var(--l-warn-text);
   --bad: var(--l-bad);
   --bad-soft: var(--l-bad-soft);
+  --bad-text: var(--l-bad-text);
   --shadow: var(--l-shadow);
   color-scheme: light;
 }
@@ -216,10 +264,13 @@
   --accent-soft: var(--d-accent-soft);
   --good: var(--d-good);
   --good-soft: var(--d-good-soft);
+  --good-text: var(--d-good-text);
   --warn: var(--d-warn);
   --warn-soft: var(--d-warn-soft);
+  --warn-text: var(--d-warn-text);
   --bad: var(--d-bad);
   --bad-soft: var(--d-bad-soft);
+  --bad-text: var(--d-bad-text);
   --shadow: var(--d-shadow);
   color-scheme: dark;
 }
@@ -310,19 +361,34 @@ button {
   position: relative;
   z-index: 5;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
-  padding: calc(var(--safe-t) + 10px) 16px 10px;
+  padding: calc(var(--safe-t) + 8px) 20px 14px;
   background: color-mix(in srgb, var(--bg) 86%, transparent);
   backdrop-filter: saturate(180%) blur(20px);
   -webkit-backdrop-filter: saturate(180%) blur(20px);
 }
 
+.kopf-haupt {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Das Datum über dem Gruß. Es beantwortet beiläufig die Frage, die man beim
+   Blick auf ein Mindesthaltbarkeitsdatum sowieso stellt: Welcher Tag ist
+   heute? */
+.kopf-datum {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-3);
+  letter-spacing: 0.01em;
+}
+
 .kopf-titel {
-  font-size: 27px;
+  font-size: 32px;
   font-weight: 700;
-  letter-spacing: -0.025em;
-  margin: 0;
+  letter-spacing: -0.03em;
+  margin: 1px 0 0;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -337,26 +403,32 @@ button {
 
 .kopf-aktionen {
   flex: none;
-  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 6px;
+  /* Ohne das säße die Schaltfläche an der Oberkante des Titels statt neben
+     ihm, seit der Kopf zwei Zeilen tragen kann. */
+  margin-top: 2px;
 }
 
+/* Abgerundetes Quadrat auf Kartenfläche, nicht mehr ein Kreis auf --surface-2:
+   So gehört sie sichtbar zur selben Familie wie die Karten darunter. */
 .kopf-knopf {
   flex: none;
   width: 40px;
   height: 40px;
   display: grid;
   place-items: center;
-  border-radius: 50%;
-  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--line);
   color: var(--text-2);
   transition: transform 0.08s;
 }
 
 .kopf-knopf-akzent {
   background: var(--accent-soft);
+  border-color: transparent;
   color: var(--accent);
 }
 
@@ -416,7 +488,7 @@ h2.section {
   position: relative;
   display: flex;
   flex: none;
-  padding-bottom: var(--safe-b);
+  padding: 6px 8px calc(6px + var(--safe-b));
   background: color-mix(in srgb, var(--surface) 82%, transparent);
   backdrop-filter: saturate(180%) blur(20px);
   -webkit-backdrop-filter: saturate(180%) blur(20px);
@@ -461,12 +533,11 @@ h2.section {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 2px;
-  /* --text-2, nicht --text-3: Die Reiter sind Navigation, keine Nebensache.
-     Zu blass gesetzt sehen sie aus, als wären sie abgeschaltet. */
-  color: var(--text-2);
-  padding: 5px 2px 4px;
+  gap: 3px;
+  /* --text-3, wie im Entwurf: Neben der Pille des aktiven Reiters wirken die
+     übrigen sonst mit, statt zurückzutreten. */
+  color: var(--text-3);
+  padding: 6px 0 4px;
   transition: color 0.15s;
 }
 
@@ -474,19 +545,33 @@ h2.section {
   color: var(--accent);
 }
 
+/*
+ * Die Pille hinter dem aktiven Symbol.
+ *
+ * Sie ist das eigentliche Signal – ein Unterschied in der Fläche, nicht in
+ * der Farbe. Wer bei Sonnenlicht auf den Bildschirm sieht oder Farben schlecht
+ * unterscheidet, erkennt sie trotzdem.
+ */
 .tab-icon {
   position: relative;
-  display: block;
-  line-height: 0;
-  transition: transform 0.1s;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 30px;
+  border-radius: 15px;
+  transition: background 0.18s, transform 0.1s;
+}
+
+.tab-on .tab-icon {
+  background: var(--accent-soft);
 }
 
 .tab:active .tab-icon {
-  transform: scale(0.86);
+  transform: scale(0.9);
 }
 
 .tab-label {
-  font-size: 10px;
+  font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.005em;
 }
@@ -497,8 +582,8 @@ h2.section {
 
 .tab-badge {
   position: absolute;
-  top: -3px;
-  right: -8px;
+  top: -2px;
+  right: 6px;
   min-width: 16px;
   height: 16px;
   padding: 0 4px;
@@ -594,7 +679,7 @@ h2.section {
 }
 
 .plus {
-  color: var(--good);
+  color: var(--good-text);
 }
 
 .minus {
@@ -602,7 +687,7 @@ h2.section {
 }
 
 .big-money {
-  font-size: 40px;
+  font-size: 38px;
   font-weight: 700;
   letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
@@ -619,7 +704,7 @@ h2.section {
 
 .tile {
   background: var(--surface);
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
   border: 1px solid var(--line);
   padding: 15px;
   text-align: left;
@@ -645,15 +730,15 @@ h2.section {
 /* --- Fortschritt ---------------------------------------------------------- */
 
 .bar {
-  height: 8px;
-  border-radius: 4px;
+  height: 6px;
+  border-radius: var(--radius-bar);
   background: var(--surface-2);
   overflow: hidden;
 }
 
 .bar-fill {
   height: 100%;
-  border-radius: 4px;
+  border-radius: var(--radius-bar);
   background: linear-gradient(90deg, var(--accent), var(--accent-2));
   transition: width 0.35s cubic-bezier(0.2, 0.8, 0.3, 1);
 }
@@ -679,7 +764,7 @@ h2.section {
   gap: 7px;
   min-height: var(--touch);
   padding: 0 18px;
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   background: var(--surface-2);
   color: var(--text);
   font-size: 15px;
@@ -700,7 +785,7 @@ h2.section {
 
 .btn-danger {
   background: var(--bad-soft);
-  color: var(--bad);
+  color: var(--bad-text);
 }
 
 .btn-ghost {
@@ -771,7 +856,7 @@ h2.section {
 .segmented {
   display: flex;
   background: var(--surface-2);
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   padding: 3px;
   gap: 3px;
 }
@@ -779,7 +864,7 @@ h2.section {
 .segmented > button {
   flex: 1;
   min-height: 38px;
-  border-radius: 9px;
+  border-radius: 11px;
   font-size: 14.5px;
   font-weight: 600;
   color: var(--text-2);
@@ -814,7 +899,7 @@ h2.section {
   width: 100%;
   min-height: var(--touch);
   padding: 10px 14px;
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--line);
   background: var(--surface);
   /* Genau 16px: Alles darunter lässt iOS beim Antippen ins Feld zoomen, und
@@ -839,7 +924,7 @@ h2.section {
 }
 
 .field-error {
-  color: var(--bad);
+  color: var(--bad-text);
   font-size: 12.5px;
   margin-top: 5px;
 }
@@ -875,7 +960,7 @@ h2.section {
   flex: none;
   width: var(--touch);
   height: var(--touch);
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   background: var(--accent);
   color: #fff;
   display: grid;
@@ -1010,17 +1095,17 @@ h2.section {
 
 .tag-bad {
   background: var(--bad-soft);
-  color: var(--bad);
+  color: var(--bad-text);
 }
 
 .tag-warn {
   background: var(--warn-soft);
-  color: var(--warn);
+  color: var(--warn-text);
 }
 
 .tag-good {
   background: var(--good-soft);
-  color: var(--good);
+  color: var(--good-text);
 }
 
 .tag-soft {
@@ -1103,7 +1188,7 @@ h2.section {
 
 .slot-on {
   background: var(--good-soft);
-  color: var(--good);
+  color: var(--good-text);
 }
 
 .slot-on .slot-num {
@@ -1182,7 +1267,7 @@ h2.section {
   border-style: solid;
   border-color: transparent;
   background: var(--good-soft);
-  color: var(--good);
+  color: var(--good-text);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1456,7 +1541,7 @@ h2.section {
   width: 100%;
   min-height: 140px;
   padding: 12px 14px;
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--line);
   background: var(--surface);
   font-size: 16px;
@@ -1580,17 +1665,17 @@ h2.section {
 
 .check-mark-ok {
   background: var(--good-soft);
-  color: var(--good);
+  color: var(--good-text);
 }
 
 .check-mark-warnung {
   background: var(--warn-soft);
-  color: var(--warn);
+  color: var(--warn-text);
 }
 
 .check-mark-fehler {
   background: var(--bad-soft);
-  color: var(--bad);
+  color: var(--bad-text);
 }
 
 .check-mark-uebersprungen {
@@ -1732,19 +1817,19 @@ h2.section {
   align-items: center;
   gap: 10px;
   padding: 11px 14px;
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   font-size: 14px;
   margin-bottom: 12px;
 }
 
 .notice-warn {
   background: var(--warn-soft);
-  color: var(--warn);
+  color: var(--warn-text);
 }
 
 .notice-bad {
   background: var(--bad-soft);
-  color: var(--bad);
+  color: var(--bad-text);
 }
 
 .notice-info {
@@ -1754,7 +1839,7 @@ h2.section {
 
 .notice-good {
   background: var(--good-soft);
-  color: var(--good);
+  color: var(--good-text);
 }
 
 /* Ein Hinweis darf mehrzeilig werden – „Du bist jetzt bei …“ passt sonst
@@ -1856,4 +1941,264 @@ details[open] > summary::before {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+/* --- Im Laden -------------------------------------------------------------- */
+
+/*
+ * Der Einkaufsmodus.
+ *
+ * Die Liste zeigt alle Abteilungen untereinander. Im Laden steht man aber in
+ * genau einer – und schiebt mit der anderen Hand den Wagen. Deshalb hier:
+ * eine Abteilung, Zeilen mit der doppelten Fläche einer Listenzeile, und
+ * unten eine Summe, die mitläuft.
+ *
+ * Der Modus legt sich über die App und bringt die Reiterleiste zum
+ * Verschwinden. Das ist Absicht: Wer an der Kühltheke steht, wechselt nicht
+ * gerade den Bereich, und die 83 Punkte sind für die Zeilen besser verwendet.
+ */
+.laden {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  max-width: 640px;
+  margin-inline: auto;
+  background: var(--bg);
+  padding-left: var(--safe-l);
+  padding-right: var(--safe-r);
+}
+
+.laden-kopf {
+  flex: none;
+  padding: calc(var(--safe-t) + 6px) 20px 14px;
+}
+
+.laden-marke {
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.laden-beenden {
+  margin-left: auto;
+  height: 32px;
+  padding: 0 13px;
+  border-radius: var(--radius-chip);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Ein Balken je Abteilung – wie weit der Rundgang ist, ohne eine Zahl. */
+.laden-fortschritt {
+  display: flex;
+  gap: 5px;
+  margin-top: 12px;
+}
+
+.laden-schritt {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface-2);
+}
+
+.laden-schritt-fertig {
+  background: var(--good);
+}
+
+.laden-schritt-hier {
+  background: var(--accent);
+}
+
+.laden-titel {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.laden-titel h2 {
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  margin: 0;
+}
+
+.laden-sub {
+  font-size: 13.5px;
+  color: var(--text-2);
+  margin-top: 2px;
+}
+
+.laden-liste {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  padding: 0 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* 76 Punkte hoch – rund das Doppelte einer Listenzeile. Im Gehen, mit einer
+   Hand, ist das der Unterschied zwischen treffen und danebentippen. */
+.laden-zeile {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  min-height: 76px;
+  padding: 14px 16px;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  transition: transform 0.08s;
+}
+
+.laden-zeile:active {
+  transform: scale(0.99);
+}
+
+.laden-kreis {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2.5px solid var(--text-3);
+  display: grid;
+  place-items: center;
+  color: transparent;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.laden-kreis-on {
+  background: var(--good);
+  border-color: var(--good);
+  color: #fff;
+}
+
+.laden-name {
+  display: block;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.laden-zeile-erledigt .laden-name {
+  color: var(--text-3);
+  text-decoration: line-through;
+}
+
+.laden-sub-zeile {
+  display: block;
+  font-size: 13px;
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.laden-menge {
+  flex: none;
+  height: 38px;
+  min-width: 44px;
+  padding: 0 12px;
+  border-radius: 13px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Das Preisfeld erscheint erst nach dem Abhaken – das ist die Reihenfolge, in
+   der es an der Kasse passiert. */
+.laden-preis {
+  flex: none;
+  height: 38px;
+  min-width: 44px;
+  padding: 0 13px;
+  border-radius: 13px;
+  background: var(--good-soft);
+  color: var(--good-text);
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.laden-preis-leer {
+  background: none;
+  border: 1px dashed var(--line);
+  color: var(--text-3);
+}
+
+.laden-fuss {
+  flex: none;
+  padding: 12px 20px calc(12px + var(--safe-b));
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+}
+
+.laden-summe {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.laden-summe-zahl {
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.laden-weiter {
+  display: flex;
+  gap: 10px;
+}
+
+.laden-zurueck {
+  flex: none;
+  width: 56px;
+  height: 54px;
+  border-radius: 17px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  display: grid;
+  place-items: center;
+}
+
+.laden-vor {
+  flex: 1;
+  height: 54px;
+  border-radius: 17px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 17px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  padding: 0 12px;
+}
+
+.laden-vor:disabled {
+  opacity: 0.45;
 }

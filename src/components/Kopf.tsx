@@ -16,10 +16,18 @@ import type { ReactNode } from 'react'
  */
 export function Kopf({
   titel,
+  ueberzeile,
   beiwerk,
   aktionen,
 }: {
   titel: string
+  /**
+   * Kleine Zeile über dem Titel – auf der Startseite das Datum.
+   *
+   * Sie beantwortet beiläufig die Frage, die man beim Blick auf ein
+   * Mindesthaltbarkeitsdatum ohnehin stellt: Welcher Tag ist heute?
+   */
+  ueberzeile?: string
   /** Kurzer Zusatz hinter dem Titel, etwa „3 offen“ oder der Monat. */
   beiwerk?: ReactNode
   /** Höchstens zwei Schaltflächen – mehr trifft man nebeneinander nicht. */
@@ -27,7 +35,10 @@ export function Kopf({
 }) {
   return (
     <header className="kopf">
-      <h1 className="kopf-titel">{titel}</h1>
+      <div className="kopf-haupt">
+        {ueberzeile && <div className="kopf-datum">{ueberzeile}</div>}
+        <h1 className="kopf-titel">{titel}</h1>
+      </div>
       {beiwerk && <div className="kopf-beiwerk">{beiwerk}</div>}
       {aktionen && <div className="kopf-aktionen">{aktionen}</div>}
     </header>

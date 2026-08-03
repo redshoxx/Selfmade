@@ -11,8 +11,9 @@ import { IconCart, IconFridge, IconHome, IconNote, IconWallet } from './Icons'
  * Haarlinie oben, der durchscheinende Untergrund und dass beim Langdrücken
  * kein Auswahlmenü aufgeht.
  *
- * Hier drin steckt der vierte: Der aktive Reiter ist nicht nur eingefärbt,
- * sondern *gefüllt*. Farbe allein ist ein schwaches Signal.
+ * Hier drin steckt der vierte: Hinter dem aktiven Symbol liegt eine Pille
+ * (siehe `.tab-icon` im Stylesheet). Farbe allein ist ein schwaches Signal –
+ * eine Fläche sieht man auch bei Sonnenlicht und ohne Farbunterscheidung.
  */
 
 interface Props {
@@ -50,7 +51,7 @@ export function TabBar({ active, counts, onChange }: Props) {
             }
           >
             <span className="tab-icon">
-              <Icon size={25} filled={on} />
+              <Icon size={24} stark={on} />
               {showBadge && (
                 <span
                   className={`tab-badge${badge.urgent ? '' : ' tab-badge-soft'}`}

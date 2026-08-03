@@ -3,7 +3,7 @@ import { Bar, TapRow } from '../components/Bits'
 import { IconCart, IconChevron, IconGear, IconTarget, IconWallet } from '../components/Icons'
 import { Kopf, KopfKnopf } from '../components/Kopf'
 import { isComplete, pace, progress, savedCents, suggestSlot, totalCents } from '../lib/challenges'
-import { formatExpiry } from '../lib/date'
+import { formatDayFull, formatExpiry, today } from '../lib/date'
 import { currentMonth, summarizeMonth, totalSaved } from '../lib/finance'
 import { formatMoney, formatSigned } from '../lib/money'
 import { entries as pantryEntries, needsAttention, pantryCounts, sortEntries } from '../lib/pantry'
@@ -90,7 +90,7 @@ export function StartView({
   if (nichtsLos) {
     return (
       <>
-        <Kopf titel={gruss} aktionen={zahnrad} />
+        <Kopf ueberzeile={formatDayFull(today())} titel={gruss} aktionen={zahnrad} />
 
         <div className="scroll">
           <p className="muted" style={{ margin: '0 2px 18px', fontSize: 15 }}>
@@ -134,7 +134,7 @@ export function StartView({
 
   return (
     <>
-      <Kopf titel={gruss} aktionen={zahnrad} />
+      <Kopf ueberzeile={formatDayFull(today())} titel={gruss} aktionen={zahnrad} />
 
       <div className="scroll">
         <div className="tiles" style={{ marginBottom: 12 }}>

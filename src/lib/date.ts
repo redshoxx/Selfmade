@@ -107,6 +107,22 @@ export function formatDayLong(date: IsoDate): string {
 }
 
 /**
+ * „Freitag, 2. August“ – die Zeile über dem Gruß auf der Startseite.
+ *
+ * Dort steht der Wochentag ausgeschrieben, nicht als Kürzel: Es ist die einzige
+ * Stelle, an der er allein steht und nicht neben einer Zahlenkolonne, in der
+ * jedes Zeichen zählt.
+ */
+export function formatDayFull(date: IsoDate): string {
+  const parts = date.split('-').map(Number) as [number, number, number]
+  const [y, m, d] = parts
+  const weekday = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'][
+    new Date(Date.UTC(y, m - 1, d)).getUTCDay()
+  ]
+  return `${weekday}, ${d}. ${MONTHS[m - 1]}`
+}
+
+/**
  * Datum in Alltagssprache: „heute“, „gestern“, „morgen“, sonst das Datum.
  * Nur so weit, wie es wirklich hilft – „vorletzten Donnerstag“ versteht niemand
  * schneller als „12.03.“.
