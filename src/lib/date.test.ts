@@ -4,8 +4,10 @@ import {
   addMonths,
   daysBetween,
   daysInMonth,
+  expiryKurz,
   formatExpiry,
   formatMonth,
+  formatMonthShort,
   formatRelative,
   isIsoDate,
   monthKey,
@@ -115,11 +117,41 @@ describe('formatExpiry', () => {
   it('sagt klar, wie es um das Produkt steht', () => {
     const heute = '2026-03-14'
     expect(formatExpiry('2026-03-14', heute)).toBe('läuft heute ab')
-    expect(formatExpiry('2026-03-15', heute)).toBe('noch bis morgen')
+    expect(formatExpiry('2026-03-15', heute)).toBe('morgen')
     expect(formatExpiry('2026-03-13', heute)).toBe('gestern abgelaufen')
     expect(formatExpiry('2026-03-10', heute)).toBe('seit 4 Tagen abgelaufen')
-    expect(formatExpiry('2026-03-20', heute)).toBe('noch 6 Tage')
-    expect(formatExpiry('2026-04-04', heute)).toBe('noch 3 Wochen')
-    expect(formatExpiry('2026-09-01', heute)).toBe('bis 01.09.')
+    expect(formatExpiry('2026-03-20', heute)).toBe('in 6 Tagen')
+    expect(formatExpiry('2026-04-04', heute)).toBe('in 3 Wochen')
+    expect(formatExpiry('2026-09-01', heute)).toBe('in 6 Monaten')
+    expect(formatExpiry('2028-01-15', heute)).toBe('bis 15.01.')
+  })
+})
+
+describe('formatMonthShort', () => {
+  it('kürzt Monat und Jahr', () => {
+    expect(formatMonthShort('2026-08')).toBe('Aug 26')
+    expect(formatMonthShort('2026-01')).toBe('Jan 26')
+    expect(formatMonthShort('2025-12')).toBe('Dez 25')
+  })
+})
+
+describe('expiryKurz', () => {
+  const heute = '2026-08-03'
+
+  it('nennt jede Stufe mit einem Wort', () => {
+    expect(expiryKurz('2026-08-01', heute)).toBe('abgelaufen')
+    expect(expiryKurz('2026-08-02', heute)).toBe('abgelaufen')
+    expect(expiryKurz(heute, heute)).toBe('heute')
+    expect(expiryKurz('2026-08-04', heute)).toBe('morgen')
+    expect(expiryKurz('2026-08-05', heute)).toBe('2 Tage')
+  })
+
+  it('wechselt die Einheit, statt zweistellig zu werden', () => {
+    expect(expiryKurz('2026-08-20', heute)).toBe('2 Wochen')
+    expect(expiryKurz('2026-11-03', heute)).toBe('3 Monate')
+  })
+
+  it('fällt bei sehr weiten Daten auf das Datum zurück', () => {
+    expect(expiryKurz('2028-01-15', heute)).toBe('15.01.')
   })
 })

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Empty, Field, TapRow } from '../components/Bits'
+import { Empty, Field } from '../components/Bits'
 import { IconPlus, IconTrash } from '../components/Icons'
 import { Kopf, KopfKnopf } from '../components/Kopf'
 import { Sheet } from '../components/Sheet'
@@ -9,7 +9,6 @@ import { formatExpiry, today } from '../lib/date'
 import {
   entries as pantryEntries,
   filterEntries,
-  pantryCounts,
   sortEntries,
   type PantryFilter,
 } from '../lib/pantry'
@@ -45,7 +44,6 @@ export function VorratView({ startFilter }: { startFilter?: PantryFilter }) {
   // zwei Stunden nach dem Einkauf heraus – die Spanne bis zum Auspacken.
   const frisch = useMemo(() => neuGekauft(state), [state])
 
-  const counts = pantryCounts(state)
   const all = useMemo(() => pantryEntries(state), [state])
   const shown = useMemo(() => sortEntries(filterEntries(all, filter)), [all, filter])
 
@@ -65,15 +63,14 @@ export function VorratView({ startFilter }: { startFilter?: PantryFilter }) {
 
       <div className="scroll">
         {frisch.length > 0 && (
-          <div className="einraeumen">
-            <div className="spread" style={{ marginBottom: 10 }}>
-              <span className="einraeumen-titel">
+          <div className="hervor">
+            <div className="hervor-kopf">
+              <span className="hervor-titel">
                 {frisch.length === 1 ? '1 Sache einräumen' : `${frisch.length} Sachen einräumen`}
               </span>
               <button
                 type="button"
-                className="btn btn-primary"
-                style={{ minHeight: 36, padding: '0 14px', fontSize: 14 }}
+                className="hervor-knopf"
                 onClick={() =>
                   dispatch({
                     type: 'pantry/ausEinkauf',
@@ -92,32 +89,27 @@ export function VorratView({ startFilter }: { startFilter?: PantryFilter }) {
                 Alle
               </button>
             </div>
-            <div className="card">
-              {frisch.slice(0, 8).map((eintrag) => (
-                <TapRow
+
+            <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {frisch.slice(0, 6).map((eintrag) => (
+                <button
                   key={eintrag.shopId}
-                  title={eintrag.name}
-                  sub={`${trimNumber(eintrag.menge)} ${eintrag.einheit} · mit Datum eintragen`}
-                  leading={<span aria-hidden="true">{aisle(eintrag.aisle).emoji}</span>}
+                  type="button"
+                  className="hervor-zeile"
                   onClick={() => setUebernehmen(eintrag)}
-                />
+                >
+                  <span aria-hidden="true">{aisle(eintrag.aisle).emoji}</span>
+                  <span className="hervor-name">
+                    {eintrag.name} · {trimNumber(eintrag.menge)} {eintrag.einheit}
+                  </span>
+                  <span className="hervor-hinweis">Datum?</span>
+                </button>
               ))}
             </div>
-            <p className="small muted" style={{ margin: '8px 2px 0' }}>
-              Einzeln antippen, wenn ein Mindesthaltbarkeitsdatum auf der Packung steht. Der
-              Vorschlag verschwindet zwei Stunden nach dem Einkauf von selbst.
-            </p>
-          </div>
-        )}
 
-        {counts.urgent > 0 && (
-          <div className="notice notice-bad">
-            <span aria-hidden="true">⚠️</span>
-            <span>
-              {counts.urgent === 1
-                ? '1 Produkt ist abgelaufen oder muss heute weg'
-                : `${counts.urgent} Produkte sind abgelaufen oder müssen jetzt weg`}
-            </span>
+            <p className="hervor-hinweis" style={{ margin: '10px 2px 0' }}>
+              Verschwindet zwei Stunden nach dem Einkauf von selbst.
+            </p>
           </div>
         )}
 
@@ -151,21 +143,26 @@ export function VorratView({ startFilter }: { startFilter?: PantryFilter }) {
             }
           />
         ) : (
-          <div className="card">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {shown.map(({ item, expiry, low }) => (
-              <TapRow
+              <button
                 key={item.id}
-                title={item.name}
-                sub={
-                  <>
+                type="button"
+                className="posten"
+                data-stufe={expiry.state}
+                onClick={() => setOpen(item)}
+              >
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span className="posten-name">{item.name}</span>
+                  <span className="posten-sub">
                     {item.bestBefore ? formatExpiry(item.bestBefore) : aisle(item.aisle).name}
                     {low && ' · nachkaufen'}
-                  </>
-                }
-                value={`${trimNumber(item.qty)} ${item.unit}`}
-                leading={<span className={`dot dot-${expiry.state}`} aria-hidden="true" />}
-                onClick={() => setOpen(item)}
-              />
+                  </span>
+                </span>
+                <span className="posten-menge">
+                  {trimNumber(item.qty)} {item.unit}
+                </span>
+              </button>
             ))}
           </div>
         )}

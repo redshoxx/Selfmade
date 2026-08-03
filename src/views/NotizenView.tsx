@@ -107,7 +107,7 @@ export function NotizenView() {
         ) : notes.length === 0 ? (
           <Empty emoji="🔍" title="Nichts gefunden" text={`„${query}“ steht in keiner Notiz.`} />
         ) : (
-          <div className="card">
+          <div className="notiz-raster">
             {notes.map((note) => (
               <NotizKarte key={note.id} note={note} onClick={() => setOpen(note)} />
             ))}
@@ -144,22 +144,35 @@ export function NotizenView() {
 }
 
 function NotizKarte({ note, onClick }: { note: Note; onClick: () => void }) {
-  const offen = note.checks.filter((c) => !c.done).length
+  const erledigt = note.checks.filter((c) => c.done).length
+  const gesamt = note.checks.length
 
   return (
-    <button type="button" className="note-card" data-farbe={note.color} onClick={onClick}>
-      <span className="note-title">
-        {note.pinned && <span aria-label="angeheftet">📌</span>}
-        {note.title || 'Ohne Titel'}
+    <button type="button" className="notiz" data-farbe={note.color} onClick={onClick}>
+      {/* Die Farbe ist ein Punkt oben, kein Streifen an der Kante: In einem
+          zweispaltigen Raster stünden die Streifen der linken Spalte an der
+          Seite, die der rechten mitten im Bild. */}
+      <span className="notiz-marke">
+        <span className="notiz-punkt" aria-hidden="true" />
+        {note.pinned && <span className="notiz-angeheftet">angeheftet</span>}
       </span>
-      {note.body && <span className="note-body">{note.body}</span>}
-      {note.checks.length > 0 && (
-        <span className="note-fortschritt">
-          <IconCheck size={13} />
-          {offen === 0
-            ? `alle ${note.checks.length} erledigt`
-            : `${note.checks.length - offen} von ${note.checks.length}`}
-        </span>
+
+      <span className="notiz-titel">{note.title || 'Ohne Titel'}</span>
+
+      {gesamt > 0 ? (
+        <>
+          <span className="bar" style={{ height: 5 }}>
+            <span
+              className="bar-fill good"
+              style={{ display: 'block', width: `${(erledigt / gesamt) * 100}%` }}
+            />
+          </span>
+          <span className="notiz-zahl">
+            {erledigt} von {gesamt} erledigt
+          </span>
+        </>
+      ) : (
+        note.body && <span className="notiz-text">{note.body}</span>
       )}
     </button>
   )

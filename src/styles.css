@@ -48,6 +48,23 @@
   --l-good-text: #158552;
   --l-warn-text: #aa670d;
   --l-bad-text: #c73931;
+  /* Zwei Linien, nicht eine: Der Rand einer Karte ist dunkler als die Linie
+     *zwischen* ihren Zeilen. Ein Wert für beides lässt eine Liste entweder
+     gestreift wirken oder randlos. */
+  --l-line-weich: #f0eee9;
+
+  /* „bald“ und „frisch“ sind im Entwurf eigene, gedämpfte Töne – nicht die
+     Warn- und Gutfarbe mit weniger Deckkraft. Der Unterschied ist beabsichtigt:
+     Sie stehen als 4-px-Rand neben einem Vorratsposten und sollen dort ruhig
+     bleiben, während „abgelaufen“ ins Auge springt. */
+  --l-ablauf-bald: #e3c98a;
+  --l-ablauf-frisch: #b9d9c6;
+
+  /* Der Einräum-Block. Dunkel im hellen Thema – der einzige Ort, an dem der
+     Entwurf bewusst aus der Reihe tanzt. Passend für etwas, das nur zwei
+     Stunden dasteht und in der Zeit auffallen muss. */
+  --l-hervor: #14141a;
+  --l-hervor-text: #ffffff;
   --l-shadow: 0 1px 2px rgba(20, 20, 30, 0.05), 0 8px 24px rgba(20, 20, 30, 0.06);
 
   /* Die dunklen Werte sind nachgerechnet, nicht geschätzt. Maßgeblich ist der
@@ -82,6 +99,11 @@
   --d-good-text: #3fc47c;
   --d-warn-text: #f0a83c;
   --d-bad-text: #ff6259;
+  --d-line-weich: #26262c;
+  --d-ablauf-bald: rgba(240, 168, 60, 0.55);
+  --d-ablauf-frisch: rgba(63, 196, 124, 0.5);
+  --d-hervor: #2b2b34;
+  --d-hervor-text: #f1f1f3;
   --d-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.35);
 
   /*
@@ -149,6 +171,11 @@
   --bad: var(--l-bad);
   --bad-soft: var(--l-bad-soft);
   --bad-text: var(--l-bad-text);
+  --line-weich: var(--l-line-weich);
+  --ablauf-bald: var(--l-ablauf-bald);
+  --ablauf-frisch: var(--l-ablauf-frisch);
+  --hervor: var(--l-hervor);
+  --hervor-text: var(--l-hervor-text);
   --shadow: var(--l-shadow);
   color-scheme: light;
 }
@@ -174,7 +201,17 @@
     --bad: var(--d-bad);
     --bad-soft: var(--d-bad-soft);
     --bad-text: var(--d-bad-text);
-    --shadow: var(--d-shadow);
+    --line-weich: var(--d-line-weich);
+    --ablauf-bald: var(--d-ablauf-bald);
+    --ablauf-frisch: var(--d-ablauf-frisch);
+    --hervor: var(--d-hervor);
+    --hervor-text: var(--d-hervor-text);
+    --line-weich: var(--d-line-weich);
+  --ablauf-bald: var(--d-ablauf-bald);
+  --ablauf-frisch: var(--d-ablauf-frisch);
+  --hervor: var(--d-hervor);
+  --hervor-text: var(--d-hervor-text);
+  --shadow: var(--d-shadow);
     color-scheme: dark;
   }
 }
@@ -199,6 +236,11 @@
   --bad: var(--l-bad);
   --bad-soft: var(--l-bad-soft);
   --bad-text: var(--l-bad-text);
+  --line-weich: var(--l-line-weich);
+  --ablauf-bald: var(--l-ablauf-bald);
+  --ablauf-frisch: var(--l-ablauf-frisch);
+  --hervor: var(--l-hervor);
+  --hervor-text: var(--l-hervor-text);
   --shadow: var(--l-shadow);
   color-scheme: light;
 }
@@ -223,6 +265,11 @@
   --bad: var(--d-bad);
   --bad-soft: var(--d-bad-soft);
   --bad-text: var(--d-bad-text);
+  --line-weich: var(--d-line-weich);
+  --ablauf-bald: var(--d-ablauf-bald);
+  --ablauf-frisch: var(--d-ablauf-frisch);
+  --hervor: var(--d-hervor);
+  --hervor-text: var(--d-hervor-text);
   --shadow: var(--d-shadow);
   color-scheme: dark;
 }
@@ -247,6 +294,11 @@
   --bad: var(--l-bad);
   --bad-soft: var(--l-bad-soft);
   --bad-text: var(--l-bad-text);
+  --line-weich: var(--l-line-weich);
+  --ablauf-bald: var(--l-ablauf-bald);
+  --ablauf-frisch: var(--l-ablauf-frisch);
+  --hervor: var(--l-hervor);
+  --hervor-text: var(--l-hervor-text);
   --shadow: var(--l-shadow);
   color-scheme: light;
 }
@@ -271,6 +323,11 @@
   --bad: var(--d-bad);
   --bad-soft: var(--d-bad-soft);
   --bad-text: var(--d-bad-text);
+  --line-weich: var(--d-line-weich);
+  --ablauf-bald: var(--d-ablauf-bald);
+  --ablauf-frisch: var(--d-ablauf-frisch);
+  --hervor: var(--d-hervor);
+  --hervor-text: var(--d-hervor-text);
   --shadow: var(--d-shadow);
   color-scheme: dark;
 }
@@ -345,7 +402,7 @@ button {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
   /* Der Abstand nach oben liegt jetzt im Kopf, nicht mehr hier. */
-  padding: 4px 16px 28px;
+  padding: 4px 20px 28px;
 }
 
 /* --- Der Kopf jeder Ansicht ----------------------------------------------- */
@@ -372,6 +429,15 @@ button {
 .kopf-haupt {
   flex: 1;
   min-width: 0;
+}
+
+/* Ein Kopf mit zwei Zeilen: oben Titel und Schaltflächen, darunter der
+   Fortschritt. Ohne das stünde beides nebeneinander, und der Titel bekäme nur
+   den Rest – im Einkauf blieb davon „Eink…“ übrig. */
+.kopf-spalte {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
 }
 
 /* Das Datum über dem Gruß. Es beantwortet beiläufig die Frage, die man beim
@@ -436,13 +502,38 @@ button {
   transform: scale(0.92);
 }
 
+/*
+ * Abschnittskopf.
+ *
+ * Vorher Kapitälchen in blassem Grau – die Bauform, die man nimmt, wenn eine
+ * Überschrift möglichst wenig stören soll. Der Entwurf macht das Gegenteil:
+ * normale Schrift in Textfarbe, dafür eine Zahl rechts, die den Abschnitt
+ * beziffert („2 dringend“, „2 von 5 knapp“). Damit beantwortet die Zeile die
+ * Frage, wegen der man hinsieht, schon bevor man die Liste liest.
+ */
 h2.section {
-  font-size: 13px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 14.5px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  text-transform: none;
+  color: var(--text);
+  margin: 18px 0 0;
+  padding: 0 2px 8px;
+}
+
+.section-zahl {
+  flex: none;
+  font-size: 12.5px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-3);
-  margin: 26px 0 9px;
+  color: var(--text-2);
+}
+
+.section-zahl-dringend {
+  color: var(--bad-text);
 }
 
 /* Abteilungsname direkt über den Waren, ohne eigene Karte und ohne die großen
@@ -455,8 +546,8 @@ h2.section {
   display: flex;
   align-items: center;
   gap: 7px;
-  padding: 7px 16px 6px;
-  margin: 10px -16px 0;
+  padding: 7px 20px 6px;
+  margin: 10px -20px 0;
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
@@ -631,7 +722,7 @@ h2.section {
 }
 
 .row + .row {
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--line-weich);
 }
 
 .row-main {
@@ -712,11 +803,9 @@ h2.section {
 }
 
 .tile-label {
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--text-2);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
 .tile-value {
@@ -820,9 +909,9 @@ h2.section {
   overflow-x: auto;
   scrollbar-width: none;
   /* Damit die Ränder beim Wischen nicht abgeschnitten wirken. */
-  margin-inline: -16px;
-  padding: 2px 16px 6px;
-  scroll-padding-inline: 16px;
+  margin-inline: -20px;
+  padding: 2px 20px 6px;
+  scroll-padding-inline: 20px;
 }
 
 .chips::-webkit-scrollbar {
@@ -944,7 +1033,7 @@ h2.section {
   display: flex;
   gap: 8px;
   align-items: center;
-  padding: 10px 16px calc(10px + var(--keyboard));
+  padding: 10px 20px calc(10px + var(--keyboard));
   border-top: 1px solid var(--line);
   background: color-mix(in srgb, var(--surface) 94%, transparent);
   backdrop-filter: blur(12px);
@@ -1338,7 +1427,7 @@ h2.section {
 .vorschlaege {
   flex: none;
   margin: 0;
-  padding: 8px 16px 2px;
+  padding: 8px 20px 2px;
   background: var(--bg);
 }
 
@@ -1385,7 +1474,7 @@ h2.section {
 }
 
 .note-card + .note-card {
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--line-weich);
 }
 
 .note-card[data-farbe]:not([data-farbe='keine'])::before {
@@ -1609,11 +1698,13 @@ h2.section {
 .swipe {
   position: relative;
   overflow: hidden;
-  background: var(--bad);
 }
 
 .swipe-row {
   position: relative;
+  /* Deckt die rote Wischfläche vollständig ab. Ohne das blitzte sie am
+     unteren Rand der letzten Zeile einer Karte als roter Strich durch. */
+  background: var(--surface);
   /* pan-y: Senkrechtes Scrollen bleibt Sache des Browsers, waagerechtes
      übernimmt die Geste. Ohne das ruckelt die Liste beim Ziehen. */
   touch-action: pan-y;
@@ -1628,6 +1719,7 @@ h2.section {
   width: 96px;
   display: grid;
   place-items: center;
+  background: var(--bad);
   color: #fff;
   pointer-events: none;
 }
@@ -2201,4 +2293,588 @@ details[open] > summary::before {
 
 .laden-vor:disabled {
   opacity: 0.45;
+}
+
+/* ===========================================================================
+   Bausteine aus dem Entwurf
+   =========================================================================== */
+
+/* --- Die große Karte oben auf der Startseite ------------------------------ */
+
+.hero {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  padding: 18px 18px 16px;
+  width: 100%;
+  text-align: left;
+  display: block;
+}
+
+.hero-kopf {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.hero-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.hero-neben {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-3);
+}
+
+.hero-zahl {
+  font-size: 38px;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  margin-top: 2px;
+}
+
+.hero-fuss {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Zeile mit getönter Symbolkachel und Etikett -------------------------- */
+
+/*
+ * Die Bauform der Ablaufliste auf der Startseite. Statt eines farbigen Punkts
+ * am Rand trägt das Symbol selbst die Stufenfarbe – als Fläche hinter dem
+ * Emoji. Rechts ein Etikett mit demselben Ton. Zwei Träger derselben Aussage,
+ * beide groß genug, um im Vorbeigehen erkannt zu werden.
+ */
+.zeile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 10px 16px;
+  text-align: left;
+  background: var(--surface);
+}
+
+.zeile + .zeile {
+  border-top: 1px solid var(--line-weich);
+}
+
+.zeile-kachel {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-chip);
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+  background: var(--surface-2);
+}
+
+.zeile-haupt {
+  flex: 1;
+  min-width: 0;
+}
+
+.zeile-name {
+  display: block;
+  font-size: 15.5px;
+  font-weight: 550;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zeile-sub {
+  display: block;
+  font-size: 12.5px;
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.etikett {
+  flex: none;
+  padding: 3px 9px;
+  border-radius: 9px;
+  font-size: 11.5px;
+  font-weight: 650;
+  white-space: nowrap;
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+
+/* Stufenfarben, gemeinsam für Kachel und Etikett. */
+[data-stufe='abgelaufen'] {
+  --stufe: var(--bad);
+  --stufe-text: var(--bad-text);
+  --stufe-soft: var(--bad-soft);
+}
+[data-stufe='dringend'] {
+  --stufe: var(--warn);
+  --stufe-text: var(--warn-text);
+  --stufe-soft: var(--warn-soft);
+}
+[data-stufe='bald'] {
+  --stufe: var(--ablauf-bald);
+  --stufe-text: var(--text-2);
+  --stufe-soft: var(--surface-2);
+}
+[data-stufe='frisch'],
+[data-stufe='unbekannt'] {
+  --stufe: var(--ablauf-frisch);
+  --stufe-text: var(--text-2);
+  --stufe-soft: var(--surface-2);
+}
+
+.zeile-kachel[data-stufe] {
+  background: var(--stufe-soft);
+}
+
+.etikett[data-stufe] {
+  background: var(--stufe-soft);
+  color: var(--stufe-text);
+}
+
+/* --- Segmentbalken der Challenge ------------------------------------------ */
+
+/*
+ * Ein Strich je Feld statt eines durchgehenden Balkens. Bei 52 Wochen sieht
+ * man damit nicht nur *wie viel*, sondern *wie oft* – und ein Loch in der
+ * Reihe fällt auf, wo ein Balken nur etwas kürzer wäre.
+ */
+.segmente {
+  display: flex;
+  gap: 3px;
+  height: 22px;
+  align-items: flex-end;
+  margin-top: 10px;
+}
+
+.segment {
+  flex: 1;
+  height: 100%;
+  border-radius: var(--radius-bar);
+  background: var(--surface-2);
+  min-width: 1px;
+}
+
+.segment-voll {
+  background: var(--accent);
+}
+
+/* --- Budgetzeile ---------------------------------------------------------- */
+
+.budget {
+  padding: 14px 16px;
+}
+
+.budget + .budget {
+  border-top: 1px solid var(--line-weich);
+}
+
+.budget-kopf {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.budget-symbol {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+}
+
+.budget-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.budget-wert {
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  font-size: 15px;
+}
+
+.budget-rest {
+  font-size: 12.5px;
+  color: var(--text-2);
+  margin-top: 6px;
+}
+
+/* --- Einkaufszeile -------------------------------------------------------- */
+
+.abteilung {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 2px 7px;
+}
+
+.abteilung-name {
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.abteilung-zahl {
+  margin-left: auto;
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--text-3);
+}
+
+.ware {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 54px;
+  padding: 8px 16px;
+  text-align: left;
+  background: var(--surface);
+}
+
+.ware + .ware {
+  border-top: 1px solid var(--line-weich);
+}
+
+.ware-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 16px;
+  font-weight: 550;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ware-erledigt .ware-name {
+  text-decoration: line-through;
+  color: var(--text-3);
+}
+
+.ware-kreis {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid var(--text-3);
+  display: grid;
+  place-items: center;
+  color: transparent;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.ware-kreis-on {
+  background: var(--good);
+  border-color: var(--good);
+  color: #fff;
+}
+
+.pille {
+  flex: none;
+  height: 32px;
+  min-width: 32px;
+  padding: 0 11px;
+  border-radius: var(--radius-chip);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.pille-preis {
+  background: var(--good-soft);
+  color: var(--good-text);
+  font-weight: 700;
+}
+
+.pille-leer {
+  background: none;
+  border: 1px dashed var(--line);
+  color: var(--text-3);
+}
+
+/* Nachkaufen-Vorschläge: gestrichelt, weil sie ein Angebot sind und noch
+   nicht auf der Liste stehen. */
+.chip-vorschlag {
+  background: var(--surface);
+  border: 1px dashed var(--text-3);
+  color: var(--text-2);
+  font-size: 13.5px;
+  font-weight: 600;
+  border-radius: var(--radius-chip);
+  min-height: 34px;
+}
+
+/* --- Kopfzeile mit beschrifteten Pillen ----------------------------------- */
+
+.kopf-pille {
+  flex: none;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 650;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.kopf-pille-voll {
+  background: var(--accent);
+  border-color: transparent;
+  color: #fff;
+  font-weight: 700;
+  padding: 0 13px;
+}
+
+.kopf-fortschritt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+/* Ohne das bliebe der Balken null Pixel breit: Als Flex-Kind bekommt er nur,
+   was sein Inhalt verlangt – und er hat keinen. */
+.kopf-fortschritt > .bar {
+  flex: 1;
+}
+
+.kopf-fortschritt-zahl {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Der hervorgehobene Block (Einräumen) --------------------------------- */
+
+.hervor {
+  border-radius: var(--radius-xl);
+  background: var(--hervor);
+  color: var(--hervor-text);
+  padding: 16px 16px 14px;
+  margin-bottom: 14px;
+}
+
+.hervor-kopf {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.hervor-titel {
+  font-size: 15.5px;
+  font-weight: 700;
+}
+
+.hervor-knopf {
+  height: 32px;
+  padding: 0 14px;
+  font-size: 13.5px;
+  border-radius: var(--radius-chip);
+  background: var(--hervor-text);
+  color: var(--hervor);
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+}
+
+.hervor-zeile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  background: color-mix(in srgb, var(--hervor-text) 8%, transparent);
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+  color: inherit;
+  min-height: var(--touch);
+}
+
+.hervor-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 14.5px;
+  font-weight: 550;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hervor-hinweis {
+  flex: none;
+  font-size: 12.5px;
+  color: color-mix(in srgb, var(--hervor-text) 60%, transparent);
+}
+
+/* --- Vorratsposten als Einzelkarte ---------------------------------------- */
+
+/*
+ * Ein 4 px breiter Rand links trägt die Ablaufstufe. Er sagt dasselbe wie der
+ * frühere Punkt, aber über die ganze Höhe der Karte – im Vorbeiscrollen sieht
+ * man die roten Kanten, ohne zu lesen.
+ */
+.posten {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--stufe, var(--line));
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  min-height: var(--touch);
+}
+
+.posten-name {
+  display: block;
+  font-size: 16px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.posten-sub {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--stufe-text, var(--text-2));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.posten-menge {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  color: var(--text-2);
+}
+
+/* --- Notizen als Raster --------------------------------------------------- */
+
+.notiz-raster {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  align-items: start;
+}
+
+.notiz {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  min-height: 84px;
+}
+
+.notiz-marke {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.notiz-punkt {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--note, var(--text-3));
+}
+
+.notiz-angeheftet {
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--text-3);
+}
+
+.notiz-titel {
+  font-size: 15.5px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  /* Zwei Zeilen, dann Schluss – sonst schiebt ein langer Titel die Karte in
+     eine Höhe, die das Raster neben ihr leer lässt. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.notiz-text {
+  font-size: 12.5px;
+  color: var(--text-2);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: pre-wrap;
+}
+
+.notiz-zahl {
+  font-size: 12px;
+  color: var(--text-2);
+  font-weight: 600;
+}
+
+/* Knopf mit Rand statt Fläche – die Bauform aus dem Entwurf für zwei
+   gleichrangige Handlungen nebeneinander. Ein gefüllter und ein leerer Knopf
+   nebeneinander behaupteten eine Rangfolge, die es hier nicht gibt. */
+.btn-umriss {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  font-weight: 650;
+}
+
+/* Knopf mit Rand statt Fläche – die Bauform aus dem Entwurf für zwei
+   gleichrangige Handlungen nebeneinander. */
+.btn-umriss {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  font-weight: 650;
 }

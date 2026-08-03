@@ -119,13 +119,13 @@ keine Einkaufsliste ist. Rezepte, Maße, Packlisten. Drei Dinge kann er:
   kein Zufall: Bei einer geteilten Packliste würde ein Zurückschreiben der
   ganzen Liste beim Schließen die Häkchen überschreiben, die der andere in der
   Zwischenzeit gesetzt hat.
-- **Farbe.** Sechs Farben als Streifen an der Kante. Was worum geht, erkennt man
-  vor dem Lesen.
+- **Farbe.** Sechs Farben als Punkt oben auf der Karte. Was worum geht, erkennt
+  man vor dem Lesen.
 - **Suche.** Ab acht Notizen, über Titel, Text *und* Häkchenpunkte – in einer
   Packliste steht das Gesuchte praktisch nie im Titel.
 
-Notizen mit offenen Häkchen stehen auf der Startseite unter *Noch abzuhaken*.
-Angeheftetes steht oben.
+Die Notizen liegen in zwei Spalten; Häkchenlisten zeigen ihren Stand schon auf
+der Karte. Angeheftetes steht oben und trägt den Vermerk.
 
 ### Verschrieben? Rückgängig
 
@@ -265,6 +265,36 @@ jedes einzeln abbestellen: die Summe als Ausgabe buchen, Posten im Vorrat
 hochzählen, die Reihenfolge dieses Ladens merken. Vorher war nur die Buchung
 sichtbar, die anderen beiden passierten still – und was man nicht sieht, kann
 man auch nicht abbestellen.
+
+## Wie die Bildschirme aufgebaut sind
+
+Der Aufbau kommt aus einem Entwurf und ist überall derselbe: Kopf, dann eine
+große Karte mit der Zahl, wegen der man den Bildschirm aufmacht, dann Listen.
+
+- **Abschnittsköpfe tragen eine Zahl rechts** – „Läuft ab · 2 dringend“,
+  „Budgets · 2 von 5 knapp“. Damit beantwortet die Zeile die Frage, wegen der
+  man hinsieht, schon bevor man die Liste liest. Vorher standen dort
+  Kapitälchen in blassem Grau, die nichts sagten.
+- **Zwei Linienstärken.** Der Rand einer Karte ist dunkler als die Linie
+  *zwischen* ihren Zeilen. Ein Wert für beides lässt eine Liste entweder
+  gestreift wirken oder randlos.
+- **Die Ablaufstufe ist ein Rand, kein Punkt.** Im Vorrat trägt jeder Posten
+  links einen 4 Punkte breiten farbigen Streifen über die volle Höhe. Beim
+  Scrollen sieht man die roten Kanten, ohne zu lesen. „Bald“ und „frisch“ sind
+  dabei eigene, gedämpfte Töne – nicht die Warnfarbe mit weniger Deckkraft.
+- **Notizen liegen in zwei Spalten**, die Farbe als Punkt oben. Häkchenlisten
+  zeigen ihren Stand als Balken.
+- **Der Einräum-Block ist dunkel**, auch im hellen Thema – die einzige Stelle,
+  an der die App aus der Reihe tanzt. Sie steht nur zwei Stunden und muss in
+  der Zeit auffallen.
+- **Ein Strich je Challenge-Feld** statt eines durchgehenden Balkens. Bei 52
+  Wochen sieht man damit nicht nur *wie viel*, sondern *wie oft* – und ein Loch
+  in der Reihe fällt auf, wo ein Balken nur etwas kürzer wäre.
+
+Geprüft wird das nicht nach Gefühl: `scratchpad/vergleich.mjs` füllt die App mit
+den Daten aus dem Entwurf und legt je Bildschirm ein Bild ab, hell und dunkel.
+Zwei Fehler sind so gefunden worden, die im Betrieb niemand gemeldet hätte –
+ein abgeschnittener Titel und ein Fortschrittsbalken ohne Breite.
 
 ## Gebaut für ein iPhone am Home-Bildschirm
 
@@ -625,7 +655,7 @@ steht in der Monatssumme ein Cent, den niemand erklären kann.
 ```sh
 npm install
 npm run dev        # Entwicklungsserver auf Port 5173
-npm test           # 290 Tests
+npm test           # 294 Tests
 npm run typecheck
 npm run build      # Produktionsbündel nach dist/
 npm run build:single  # alles in einer HTML-Datei, nach dist-single/
@@ -675,7 +705,7 @@ supabase/
 ```
 
 Die Rechenlogik liegt vollständig in `lib/` und ist ohne Oberfläche testbar –
-alle 290 Tests laufen ohne Browser. Was in den Views steht, ist Darstellung.
+alle 294 Tests laufen ohne Browser. Was in den Views steht, ist Darstellung.
 
 ### Auf dem Telefon
 

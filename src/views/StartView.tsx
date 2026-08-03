@@ -1,9 +1,10 @@
 import { useMemo } from 'react'
-import { Bar, TapRow } from '../components/Bits'
-import { IconCart, IconChevron, IconGear, IconTarget, IconWallet } from '../components/Icons'
+import { Bar } from '../components/Bits'
+import { IconChevron, IconGear } from '../components/Icons'
 import { Kopf, KopfKnopf } from '../components/Kopf'
-import { isComplete, pace, progress, savedCents, suggestSlot, totalCents } from '../lib/challenges'
-import { formatDayFull, formatExpiry, today } from '../lib/date'
+import { isComplete, savedCents, suggestSlot, totalCents } from '../lib/challenges'
+import { aisle } from '../lib/aisles'
+import { expiryKurz, formatDayFull, today } from '../lib/date'
 import { currentMonth, summarizeMonth, totalSaved } from '../lib/finance'
 import { formatMoney, formatSigned } from '../lib/money'
 import { entries as pantryEntries, needsAttention, pantryCounts, sortEntries } from '../lib/pantry'
@@ -11,7 +12,7 @@ import { shopCounts } from '../lib/shopping'
 import { live } from '../lib/store'
 import { useApp } from '../lib/useApp'
 import type { GoIntent } from '../App'
-import type { Tab } from '../lib/types'
+import type { Challenge, Tab } from '../lib/types'
 
 /**
  * Die Startseite.
@@ -49,23 +50,12 @@ export function StartView({
     () =>
       sortEntries(pantryEntries(state))
         .filter((e) => needsAttention(e.expiry.state))
-        .slice(0, 4),
+        .slice(0, 3),
     [state],
   )
   const challenges = useMemo(
     () => live(state.challenges).filter((c) => !c.archived && !isComplete(c)),
     [state.challenges],
-  )
-
-  // Notizen mit offenen Häkchen – eine Packliste, an der noch etwas fehlt,
-  // gehört auf die Startseite. Reiner Text nicht: Der wartet auf nichts.
-  const listen = useMemo(
-    () =>
-      live(state.notes)
-        .filter((n) => n.checks.some((c) => !c.done))
-        .sort((a, b) => b.updatedAt - a.updatedAt)
-        .slice(0, 3),
-    [state.notes],
   )
 
   const nichtsLos =
@@ -81,6 +71,7 @@ export function StartView({
 
   const name = state.settings.displayName
   const gruss = `Hallo${name !== 'Ich' ? ` ${name}` : ''}`
+  const monatsName = MONATE[Number(month.split('-')[1]) - 1] ?? ''
   const zahnrad = (
     <KopfKnopf label="Einstellungen" onClick={onEinstellungen}>
       <IconGear size={20} />
@@ -132,132 +123,108 @@ export function StartView({
     )
   }
 
+  // Die Challenge, die als Nächstes dran ist – der Entwurf zeigt genau eine.
+  const challenge = challenges[0]
+
   return (
     <>
       <Kopf ueberzeile={formatDayFull(today())} titel={gruss} aktionen={zahnrad} />
 
       <div className="scroll">
-        <div className="tiles" style={{ marginBottom: 12 }}>
-          <button type="button" className="tile" onClick={() => onGo('geld')}>
-            <div className="tile-label">Diesen Monat</div>
-            <div
-              className="tile-value"
-              style={{
-                color: summary.balanceCents < 0 ? 'var(--bad)' : undefined,
-              }}
-            >
-              {formatSigned(summary.balanceCents)}
+        {/* Die große Karte: die eine Zahl, wegen der man die App aufmacht. */}
+        <button type="button" className="hero" onClick={() => onGo('geld')}>
+          <div className="hero-kopf">
+            <span className="hero-label">Bleibt diesen Monat</span>
+            <span className="hero-neben">{monatsName}</span>
+          </div>
+          <div
+            className="hero-zahl"
+            style={{ color: summary.balanceCents < 0 ? 'var(--bad-text)' : undefined }}
+          >
+            {formatSigned(summary.balanceCents)}
+          </div>
+          {summary.incomeCents > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <Bar
+                percent={(summary.expenseCents / summary.incomeCents) * 100}
+                tone={summary.expenseCents > summary.incomeCents ? 'bad' : undefined}
+              />
             </div>
-          </button>
+          )}
+          <div className="hero-fuss">
+            <span>{formatMoney(summary.incomeCents)} rein</span>
+            <span>{formatMoney(summary.expenseCents)} raus</span>
+          </div>
+        </button>
+
+        <div className="tiles" style={{ marginTop: 10 }}>
           <button type="button" className="tile" onClick={() => onGo('geld', { sparen: true })}>
             <div className="tile-label">Gespart</div>
             <div className="tile-value">{formatMoney(gespart)}</div>
           </button>
+          <button type="button" className="tile" onClick={() => onGo('einkauf')}>
+            <div className="tile-label">Einkauf offen</div>
+            <div className="tile-value">
+              {shop.open === 1 ? '1 Eintrag' : `${shop.open} Einträge`}
+            </div>
+          </button>
         </div>
-
-        {counts.urgent > 0 && (
-          <div className="notice notice-bad">
-            <span aria-hidden="true">⚠️</span>
-            <span>
-              {counts.urgent === 1
-                ? '1 Produkt muss jetzt weg'
-                : `${counts.urgent} Produkte müssen jetzt weg`}
-            </span>
-          </div>
-        )}
 
         {ablaufend.length > 0 && (
           <>
-            <h2 className="section">Läuft ab</h2>
+            <h2 className="section">
+              Läuft ab
+              {counts.urgent > 0 && (
+                <span className="section-zahl section-zahl-dringend">
+                  {counts.urgent} dringend
+                </span>
+              )}
+            </h2>
             <div className="card">
               {ablaufend.map(({ item, expiry }) => (
-                <TapRow
+                <button
                   key={item.id}
-                  title={item.name}
-                  sub={item.bestBefore ? formatExpiry(item.bestBefore) : undefined}
-                  leading={<span className={`dot dot-${expiry.state}`} aria-hidden="true" />}
+                  type="button"
+                  className="zeile"
                   onClick={() => onGo('vorrat')}
-                />
+                >
+                  <span className="zeile-kachel" data-stufe={expiry.state} aria-hidden="true">
+                    {aisle(item.aisle).emoji}
+                  </span>
+                  <span className="zeile-haupt">
+                    <span className="zeile-name">{item.name}</span>
+                    <span className="zeile-sub">
+                      {trimNumber(item.qty)} {item.unit}
+                    </span>
+                  </span>
+                  <span className="etikett" data-stufe={expiry.state}>
+                    {item.bestBefore ? expiryKurz(item.bestBefore) : aisle(item.aisle).name}
+                  </span>
+                </button>
               ))}
             </div>
           </>
         )}
 
-        {shop.open > 0 && (
+        {challenge && (
           <>
-            <h2 className="section">Einkauf</h2>
+            <h2 className="section">{challenge.name}</h2>
             <button
               type="button"
               className="card pad"
               style={{ width: '100%', textAlign: 'left' }}
-              onClick={() => onGo('einkauf')}
+              onClick={() => onGo('geld', { sparen: true })}
             >
-              <div className="spread">
-                <span style={{ fontWeight: 600 }}>
-                  {shop.open === 1 ? '1 Eintrag offen' : `${shop.open} Einträge offen`}
-                </span>
-                <IconChevron size={18} />
+              <div className="spread" style={{ alignItems: 'baseline' }}>
+                <span style={{ fontSize: 15, fontWeight: 600 }}>{naechstesFeld(challenge)}</span>
+                <span className="row-value">{formatMoney(savedCents(challenge))}</span>
+              </div>
+              <Segmente challenge={challenge} />
+              <div className="small muted" style={{ marginTop: 8 }}>
+                {challenge.filled.length} von {challenge.slots} Feldern · Ziel{' '}
+                {formatMoney(totalCents(challenge))}
               </div>
             </button>
-          </>
-        )}
-
-        {challenges.length > 0 && (
-          <>
-            <h2 className="section">Challenges</h2>
-            <div className="stack">
-              {challenges.slice(0, 3).map((challenge) => {
-                const status = pace(challenge)
-                const next = suggestSlot(challenge)
-                return (
-                  <button
-                    key={challenge.id}
-                    type="button"
-                    className="card pad"
-                    style={{ width: '100%', textAlign: 'left' }}
-                    onClick={() => onGo('geld', { sparen: true })}
-                  >
-                    <div className="spread">
-                      <span style={{ fontWeight: 600 }}>{challenge.name}</span>
-                      <span className="row-value">{formatMoney(savedCents(challenge))}</span>
-                    </div>
-                    <div style={{ marginTop: 8 }}>
-                      <Bar
-                        percent={progress(challenge)}
-                        tone={status.onTrack ? undefined : 'warn'}
-                      />
-                    </div>
-                    <div className="small muted" style={{ marginTop: 5 }}>
-                      {status.behind > 0
-                        ? `${status.behind} ${status.behind === 1 ? 'Feld' : 'Felder'} nachzuholen`
-                        : next !== null
-                          ? `Als Nächstes Feld ${next + 1} · von ${formatMoney(totalCents(challenge))} insgesamt`
-                          : 'alles erledigt'}
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
-          </>
-        )}
-
-        {listen.length > 0 && (
-          <>
-            <h2 className="section">Noch abzuhaken</h2>
-            <div className="card">
-              {listen.map((note) => {
-                const offen = note.checks.filter((c) => !c.done).length
-                return (
-                  <TapRow
-                    key={note.id}
-                    title={note.title || 'Ohne Titel'}
-                    sub={`${note.checks.length - offen} von ${note.checks.length} erledigt`}
-                    leading={<span className={`punkt-farbe`} data-farbe={note.color} aria-hidden="true" />}
-                    onClick={() => onGo('notizen')}
-                  />
-                )
-              })}
-            </div>
           </>
         )}
 
@@ -280,34 +247,8 @@ export function StartView({
           </>
         )}
 
-        {/* Am Ende, nicht oben: Wer schon Daten hat, will zuerst die Zahlen
-          sehen. Danach ist der kurze Weg zum nächsten Handgriff willkommen. */}
-        <h2 className="section">Schnell erfasst</h2>
-        <div className="quick-tiles">
-          <button
-            type="button"
-            className="quick-tile"
-            onClick={() => onGo('geld', { compose: 'ausgabe' })}
-          >
-            <IconWallet size={20} />
-            Ausgabe
-          </button>
-          <button type="button" className="quick-tile" onClick={() => onGo('einkauf')}>
-            <IconCart size={20} />
-            Einkauf
-          </button>
-          <button
-            type="button"
-            className="quick-tile"
-            onClick={() => onGo('geld', { sparen: true })}
-          >
-            <IconTarget size={20} />
-            Sparen
-          </button>
-        </div>
-
         {(!session || zugang === false) && (
-          <div style={{ marginTop: 12 }}>
+          <div style={{ marginTop: 16 }}>
             <Entry
               emoji="☁️"
               title={session ? 'Noch nicht freigeschaltet' : 'Anmelden und sichern'}
@@ -323,6 +264,55 @@ export function StartView({
       </div>
     </>
   )
+}
+
+/**
+ * Ein Strich je Feld der Challenge.
+ *
+ * Bei 52 Wochen sieht man damit nicht nur *wie viel*, sondern *wie oft* – und
+ * ein Loch in der Reihe fällt auf, wo ein durchgehender Balken nur etwas
+ * kürzer wäre. Ab 60 Feldern werden die Striche schmaler als ein Gerätepixel;
+ * dann fasst je Strich mehrere Felder zusammen.
+ */
+function Segmente({ challenge }: { challenge: Challenge }) {
+  const striche = Math.min(challenge.slots, 52)
+  const proStrich = challenge.slots / striche
+  const gefuellt = new Set(challenge.filled)
+
+  return (
+    <div
+      className="segmente"
+      role="progressbar"
+      aria-valuemin={0}
+      aria-valuemax={challenge.slots}
+      aria-valuenow={challenge.filled.length}
+      aria-label={`${challenge.filled.length} von ${challenge.slots} Feldern`}
+    >
+      {Array.from({ length: striche }, (_, i) => {
+        const von = Math.round(i * proStrich)
+        const bis = Math.round((i + 1) * proStrich)
+        let voll = false
+        for (let slot = von; slot < bis; slot++) if (gefuellt.has(slot)) voll = true
+        return <span key={i} className={`segment${voll ? ' segment-voll' : ''}`} />
+      })}
+    </div>
+  )
+}
+
+/** „2“ statt „2.0“, aber „1.5“ bleibt „1,5“. */
+function trimNumber(value: number): string {
+  return new Intl.NumberFormat('de-DE', { maximumFractionDigits: 2 }).format(value)
+}
+
+const MONATE = [
+  'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
+  'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember',
+]
+
+/** „Feld 22 ist dran“ – oder, wenn nichts offen ist, dass es das war. */
+function naechstesFeld(challenge: Challenge): string {
+  const next = suggestSlot(challenge)
+  return next === null ? 'Alle Felder voll' : `Feld ${next + 1} ist dran`
 }
 
 /* --- Einstiegskarte -------------------------------------------------------- */

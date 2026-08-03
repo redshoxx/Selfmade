@@ -92,6 +92,18 @@ export function formatMonth(key: string): string {
   return `${MONTHS[m - 1] ?? key} ${y}`
 }
 
+/**
+ * „Aug 26“ – der Monatswechsel im Kopf.
+ *
+ * Kürzer als „August 2026“, weil dort links der Titel steht und rechts zwei
+ * Pfeile: Auf 390 Punkten bleiben dazwischen keine neun Zeichen.
+ */
+export function formatMonthShort(key: string): string {
+  const parts = key.split('-').map(Number) as [number, number]
+  const [y, m] = parts
+  return `${MONTHS[m - 1]?.slice(0, 3) ?? key} ${String(y).slice(-2)}`
+}
+
 /** „14.03.“ – kurz, für Listen. */
 export function formatDayShort(date: IsoDate): string {
   const [, m, d] = date.split('-')
@@ -137,14 +149,36 @@ export function formatRelative(date: IsoDate, from: IsoDate = today()): string {
   return formatDayShort(date)
 }
 
+/**
+ * Restlaufzeit in zwei, drei Zeichen – für das Etikett am rechten Rand.
+ *
+ * `formatExpiry` schreibt ganze Sätze („noch bis morgen“). Die passen in eine
+ * Unterzeile, nicht in ein Etikett von neun Pixeln Polster. Hier steht nur das
+ * Wort, auf das es ankommt.
+ */
+export function expiryKurz(date: IsoDate, from: IsoDate = today()): string {
+  const diff = daysBetween(from, date)
+  if (diff < 0) return 'abgelaufen'
+  if (diff === 0) return 'heute'
+  if (diff === 1) return 'morgen'
+  if (diff <= 13) return `${diff} Tage`
+  if (diff <= 60) return `${Math.round(diff / 7)} Wochen`
+  if (diff <= 400) return `${Math.round(diff / 30)} Monate`
+  return formatDayShort(date)
+}
+
 /** Restlaufzeit eines Mindesthaltbarkeitsdatums in Worten. */
 export function formatExpiry(date: IsoDate, from: IsoDate = today()): string {
   const diff = daysBetween(from, date)
   if (diff < -1) return `seit ${Math.abs(diff)} Tagen abgelaufen`
   if (diff === -1) return 'gestern abgelaufen'
   if (diff === 0) return 'läuft heute ab'
-  if (diff === 1) return 'noch bis morgen'
-  if (diff <= 13) return `noch ${diff} Tage`
-  if (diff <= 60) return `noch ${Math.round(diff / 7)} Wochen`
+  // „morgen“ und „in 2 Tagen“ statt „noch bis morgen“ und „noch 2 Tage“:
+  // Der Blick springt auf das Wort, das die Frist nennt, und das steht damit
+  // vorn statt hinter einem Füllwort.
+  if (diff === 1) return 'morgen'
+  if (diff <= 13) return `in ${diff} Tagen`
+  if (diff <= 60) return `in ${Math.round(diff / 7)} Wochen`
+  if (diff <= 400) return `in ${Math.round(diff / 30)} Monaten`
   return `bis ${formatDayShort(date)}`
 }

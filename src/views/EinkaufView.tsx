@@ -1,7 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { AmountField, Bar, Empty, Field } from '../components/Bits'
-import { IconCart, IconCheck, IconClose, IconPlus, IconTemplate, IconTrash } from '../components/Icons'
-import { Kopf, KopfKnopf } from '../components/Kopf'
+import { IconCheck, IconClose, IconPlus, IconTemplate, IconTrash } from '../components/Icons'
 import { Sheet } from '../components/Sheet'
 import { UndoBar } from '../components/Undo'
 import { AISLES, aisle, guessAisle } from '../lib/aisles'
@@ -70,6 +69,13 @@ export function EinkaufView() {
       }))
       .filter((group) => group.items.length > 0)
   }, [state, query])
+
+  // Was im Wagen zusammenkommt – steht neben „Im Wagen“, damit man die Summe
+  // sieht, ohne den Block aufzuklappen.
+  const wagenSumme = useMemo(
+    () => live(state.shopItems).filter((i) => i.done).reduce((s, i) => s + (i.priceCents ?? 0), 0),
+    [state.shopItems],
+  )
 
   const erledigte = useMemo(() => {
     const needle = query.trim().toLowerCase()
@@ -143,34 +149,39 @@ export function EinkaufView() {
 
   return (
     <>
-      <Kopf
-        titel="Einkauf"
-        beiwerk={
-          counts.open > 0 ? `${counts.open} offen` : counts.total > 0 ? 'alles erledigt' : undefined
-        }
-        aktionen={
-          <>
-            <KopfKnopf label="Vorlagen" onClick={() => setTemplates(true)}>
-              <IconTemplate size={20} />
-            </KopfKnopf>
-            {/* Nur wenn etwas offen ist: Ein Rundgang durch eine leere Liste
-                führt zu nichts. */}
-            {counts.open > 0 && (
-              <KopfKnopf label="Im Laden" onClick={() => setImLaden(true)} ton="akzent">
-                <IconCart size={20} />
-              </KopfKnopf>
-            )}
-          </>
-        }
-      />
+      <div className="kopf kopf-spalte">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%' }}>
+          <h1 className="kopf-titel" style={{ flex: 1 }}>
+            Einkauf
+          </h1>
+          <button type="button" className="kopf-pille" onClick={() => setTemplates(true)}>
+            <IconTemplate size={16} />
+            Vorlagen
+          </button>
+          {/* Nur wenn etwas offen ist: Ein Rundgang durch eine leere Liste
+              führt zu nichts. */}
+          {counts.open > 0 && (
+            <button
+              type="button"
+              className="kopf-pille kopf-pille-voll"
+              onClick={() => setImLaden(true)}
+            >
+              Im Laden
+            </button>
+          )}
+        </div>
 
-      <div className="scroll">
-        {counts.total > 0 && counts.done > 0 && (
-          <div style={{ marginBottom: 14 }}>
+        {counts.total > 0 && (
+          <div className="kopf-fortschritt">
             <Bar percent={(counts.done / counts.total) * 100} tone="good" />
+            <span className="kopf-fortschritt-zahl">
+              {counts.done} / {counts.total}
+            </span>
           </div>
         )}
+      </div>
 
+      <div className="scroll">
         {/* Nur der Ausnahmefall bekommt einen Hinweis. Dass die Liste geteilt
             ist, ist der Normalzustand – ein Banner auf jedem Bildschirm, das
             „alles in Ordnung“ meldet, liest nach zwei Tagen niemand mehr. */}
@@ -209,36 +220,32 @@ export function EinkaufView() {
         )}
 
         {restock.length > 0 && !query && (
-          <>
-            <h2 className="section">Geht zu Hause zur Neige</h2>
-            <div className="chips">
-              {restock.slice(0, 8).map(({ item }) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className="chip"
-                  onClick={() =>
-                    dispatch({
-                      type: 'shop/add',
-                      item: {
-                        name: item.name,
-                        qty: '',
-                        aisle: item.aisle,
-                        done: false,
-                        addedBy: state.settings.displayName,
-                        pantryId: item.id,
-                        note: '',
-                        priceCents: null,
-                      },
-                    })
-                  }
-                >
-                  <IconPlus size={15} />
-                  {item.name}
-                </button>
-              ))}
-            </div>
-          </>
+          <div className="chips" style={{ paddingTop: 6 }}>
+            {restock.slice(0, 8).map(({ item }) => (
+              <button
+                key={item.id}
+                type="button"
+                className="chip chip-vorschlag"
+                onClick={() =>
+                  dispatch({
+                    type: 'shop/add',
+                    item: {
+                      name: item.name,
+                      qty: '',
+                      aisle: item.aisle,
+                      done: false,
+                      addedBy: state.settings.displayName,
+                      pantryId: item.id,
+                      note: '',
+                      priceCents: null,
+                    },
+                  })
+                }
+              >
+                + {item.name}
+              </button>
+            ))}
+          </div>
         )}
 
         {groups.length === 0 ? (
@@ -258,10 +265,14 @@ export function EinkaufView() {
         ) : (
           groups.map((group) => (
             <section key={group.aisle.id}>
-              <div className="aisle-head">
-                <span aria-hidden="true">{group.aisle.emoji}</span>
-                <span>{group.aisle.name}</span>
-                {group.openCount > 0 && <span className="aisle-head-count">{group.openCount}</span>}
+              <div className="abteilung">
+                <span aria-hidden="true" style={{ fontSize: 15 }}>
+                  {group.aisle.emoji}
+                </span>
+                <span className="abteilung-name">{group.aisle.name}</span>
+                {group.openCount > 0 && (
+                  <span className="abteilung-zahl">{group.openCount}</span>
+                )}
               </div>
               <div className="card">
                 {group.items.map((item) => (
@@ -299,7 +310,10 @@ export function EinkaufView() {
                 aria-hidden="true"
               />
               Im Wagen
-              <span className="ausklapp-zahl">{erledigte.length}</span>
+              <span className="ausklapp-zahl">
+                {erledigte.length}
+                {wagenSumme > 0 && ` · ${formatMoney(wagenSumme)}`}
+              </span>
             </button>
 
             {erledigteOffen && (
@@ -442,7 +456,15 @@ function ShopRow({
 
   return (
     <div className="swipe">
-      <span className="swipe-hint" aria-hidden="true">
+      {/* Nur sichtbar, während gezogen wird. Dauerhaft gemalt blieb von ihr
+          eine Viertelpixel-Zeile Rot unter der letzten Zeile einer Karte
+          stehen – der Browser rundet die weiße Zeile darüber anders als die
+          rote Fläche darunter. */}
+      <span
+        className="swipe-hint"
+        aria-hidden="true"
+        style={{ opacity: swipe.offset < 0 ? 1 : 0 }}
+      >
         <IconTrash size={20} />
       </span>
       <div
@@ -453,7 +475,7 @@ function ShopRow({
         }}
         {...swipe.handlers}
       >
-        <div className={`row${item.done ? ' row-done' : ''}${sub ? '' : ' row-tight'}`}>
+        <div className={`ware${item.done ? ' ware-erledigt' : ''}`}>
           <span
             className="check-hit"
             onClick={(event) => {
@@ -472,19 +494,19 @@ function ShopRow({
               }
             }}
           >
-            <span className={`check${item.done ? ' check-on' : ''}`}>
-              <IconCheck size={15} />
+            <span className={`ware-kreis${item.done ? ' ware-kreis-on' : ''}`}>
+              <IconCheck size={14} />
             </span>
           </span>
 
           <button
             type="button"
-            className="row-main"
+            className="ware-name"
             onClick={onOpen}
             style={{ background: 'none', textAlign: 'left' }}
           >
-            <span className="row-title">{item.name}</span>
-            {sub && <span className="row-sub">{sub}</span>}
+            {item.name}
+            {sub && <span className="zeile-sub">{sub}</span>}
           </button>
 
           {/* Ist der Eintrag abgehakt, tritt die Menge zurück und der Preis
@@ -492,7 +514,7 @@ function ShopRow({
           {item.done ? (
             <button
               type="button"
-              className={`price-add${item.priceCents !== null ? ' price-set' : ''}`}
+              className={`pille${item.priceCents !== null ? ' pille-preis' : ' pille-leer'}`}
               onClick={onPrice}
               aria-label={`Preis für ${item.name}`}
             >
@@ -503,7 +525,7 @@ function ShopRow({
               <button type="button" onClick={() => bump(-1)} aria-label="Menge verringern">
                 −
               </button>
-              <span className="qty" onClick={() => setStepping(false)}>
+              <span className="pille" onClick={() => setStepping(false)}>
                 {item.qty || '1'}
               </span>
               <button type="button" onClick={() => bump(1)} aria-label="Menge erhöhen">
@@ -513,7 +535,7 @@ function ShopRow({
           ) : (
             <button
               type="button"
-              className={`qty${item.qty ? '' : ' qty-empty'}`}
+              className={`pille${item.qty ? '' : ' pille-leer'}`}
               onClick={() => (isBumpable(item.qty) ? setStepping(true) : onOpen())}
               aria-label={item.qty ? `Menge ${item.qty} ändern` : 'Menge festlegen'}
             >

@@ -4,7 +4,7 @@ import { IconPlus, IconTrash } from '../components/Icons'
 import { Kopf } from '../components/Kopf'
 import { Sheet } from '../components/Sheet'
 import { SparenBereich } from './SparenBereich'
-import { addMonths, formatDayLong, formatMonth, today } from '../lib/date'
+import { addMonths, formatDayLong, formatMonth, formatMonthShort, today } from '../lib/date'
 import {
   budgetStatus,
   currentMonth,
@@ -67,6 +67,9 @@ export function GeldView({
     )
   }, [state, month, budgets])
 
+  // Was der Abschnittskopf beziffert: überzogen oder ab 80 Prozent.
+  const knapp = budgets.filter((b) => b.over || b.usedPercent >= 80).length
+
   const isCurrent = month === currentMonth()
 
   return (
@@ -85,8 +88,8 @@ export function GeldView({
               >
                 ‹
               </button>
-              <span className="kopf-beiwerk" style={{ minWidth: '8ch', textAlign: 'center' }}>
-                {formatMonth(month)}
+              <span className="kopf-beiwerk" style={{ minWidth: '6ch', textAlign: 'center' }}>
+                {formatMonthShort(month)}
               </span>
               <button
                 type="button"
@@ -125,40 +128,48 @@ export function GeldView({
           <SparenBereich startPicking={startPicking} />
         ) : (
           <>
-            <div className="card pad" style={{ marginBottom: 12 }}>
-              <div className="tile-label">Bleibt übrig</div>
+            <div className="hero">
+              <div className="hero-kopf">
+                <span className="hero-label">Bleibt übrig</span>
+                <span className="hero-neben">{formatMonth(month)}</span>
+              </div>
               <div
-                className="big-money"
-                style={{
-                  color: summary.balanceCents < 0 ? 'var(--bad)' : 'var(--text)',
-                }}
+                className="hero-zahl"
+                style={{ color: summary.balanceCents < 0 ? 'var(--bad-text)' : undefined }}
               >
                 {formatSigned(summary.balanceCents)}
               </div>
-              <div className="spread small muted" style={{ marginTop: 10 }}>
-                <span>Rein {formatMoney(summary.incomeCents)}</span>
-                <span>Raus {formatMoney(summary.expenseCents)}</span>
-              </div>
               {summary.incomeCents > 0 && (
-                <div style={{ marginTop: 8 }}>
+                <div style={{ marginTop: 12 }}>
                   <Bar
                     percent={(summary.expenseCents / summary.incomeCents) * 100}
                     tone={summary.expenseCents > summary.incomeCents ? 'bad' : undefined}
                   />
                 </div>
               )}
+              <div className="hero-fuss">
+                <span>{formatMoney(summary.incomeCents)} rein</span>
+                <span>{formatMoney(summary.expenseCents)} raus</span>
+              </div>
             </div>
 
-            <div className="btn-row" style={{ marginTop: 0 }}>
+            {/* Zwei gleichrangige Handlungen, also zwei gleich aussehende
+                Knöpfe. Ein gefüllter neben einem leeren behauptete eine
+                Rangfolge, die es hier nicht gibt. */}
+            <div className="btn-row" style={{ marginTop: 12 }}>
               <button
                 type="button"
-                className="btn btn-primary"
+                className="btn btn-umriss"
                 onClick={() => setCompose('ausgabe')}
               >
                 <IconPlus size={18} />
                 Ausgabe
               </button>
-              <button type="button" className="btn" onClick={() => setCompose('einnahme')}>
+              <button
+                type="button"
+                className="btn btn-umriss"
+                onClick={() => setCompose('einnahme')}
+              >
                 <IconPlus size={18} />
                 Einnahme
               </button>
@@ -168,33 +179,36 @@ export function GeldView({
               <>
                 {/* Überzogenes steht oben – `budgetStatus` sortiert nach
                 Auslastung, das Dringendste kommt also von selbst zuerst. */}
-                <h2 className="section">Budgets</h2>
+                <h2 className="section">
+                  Budgets
+                  {knapp > 0 && (
+                    <span className="section-zahl">
+                      {knapp} von {budgets.length} knapp
+                    </span>
+                  )}
+                </h2>
                 <div className="card">
                   {budgets.map((b) => (
-                    <div
-                      key={b.category.id}
-                      className="row"
-                      style={{ display: 'block', padding: 14 }}
-                    >
-                      <div className="spread">
-                        <span className="row-title">
-                          <span aria-hidden="true">{b.category.emoji} </span>
-                          {b.category.name}
+                    <div key={b.category.id} className="budget">
+                      <div className="budget-kopf">
+                        <span className="budget-symbol" aria-hidden="true">
+                          {b.category.emoji}
                         </span>
+                        <span className="budget-name">{b.category.name}</span>
                         <span
-                          className="row-value"
-                          style={{ color: b.over ? 'var(--bad)' : undefined }}
+                          className="budget-wert"
+                          style={{ color: b.over ? 'var(--bad-text)' : undefined }}
                         >
                           {formatMoney(b.spentCents)}
                         </span>
                       </div>
-                      <div style={{ marginTop: 7 }}>
+                      <div style={{ marginTop: 10 }}>
                         <Bar
                           percent={b.usedPercent}
                           tone={b.over ? 'bad' : b.usedPercent >= 80 ? 'warn' : 'good'}
                         />
                       </div>
-                      <div className="small muted" style={{ marginTop: 5 }}>
+                      <div className="budget-rest">
                         {b.over
                           ? `${formatMoney(b.spentCents - b.budgetCents)} über dem Budget`
                           : `noch ${formatMoney(b.budgetCents - b.spentCents)} von ${formatMoney(b.budgetCents)}`}
