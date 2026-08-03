@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { AmountField, Bar, Empty, Field } from '../components/Bits'
-import { IconCheck, IconClose, IconPlus, IconTemplate, IconTrash } from '../components/Icons'
+import { IconCart, IconCheck, IconClose, IconPlus, IconTemplate, IconTrash } from '../components/Icons'
 import { Kopf, KopfKnopf } from '../components/Kopf'
 import { Sheet } from '../components/Sheet'
 import { UndoBar } from '../components/Undo'
@@ -15,6 +15,7 @@ import { useApp } from '../lib/useApp'
 import { useSwipeToDelete } from '../lib/useSwipe'
 import { useUndo } from '../lib/useUndo'
 import type { AisleId, ShopItem } from '../lib/types'
+import { ImLadenView } from './ImLadenView'
 import { VorlagenSheet } from './VorlagenSheet'
 import { AbschlussSheet } from './AbschlussSheet'
 
@@ -39,6 +40,7 @@ export function EinkaufView() {
   const [templates, setTemplates] = useState(false)
   const [finishing, setFinishing] = useState(false)
   const [erledigteOffen, setErledigteOffen] = useState(false)
+  const [imLaden, setImLaden] = useState(false)
   const input = useRef<HTMLInputElement>(null)
   const { undo, dismiss, remove } = useUndo(dispatch)
 
@@ -127,6 +129,18 @@ export function EinkaufView() {
     dispatch({ type: 'shop/toggle', id: item.id })
   }
 
+  if (imLaden) {
+    return (
+      <ImLadenView
+        onBeenden={() => setImLaden(false)}
+        onFertig={() => {
+          setImLaden(false)
+          setFinishing(true)
+        }}
+      />
+    )
+  }
+
   return (
     <>
       <Kopf
@@ -135,9 +149,18 @@ export function EinkaufView() {
           counts.open > 0 ? `${counts.open} offen` : counts.total > 0 ? 'alles erledigt' : undefined
         }
         aktionen={
-          <KopfKnopf label="Vorlagen" onClick={() => setTemplates(true)}>
-            <IconTemplate size={20} />
-          </KopfKnopf>
+          <>
+            <KopfKnopf label="Vorlagen" onClick={() => setTemplates(true)}>
+              <IconTemplate size={20} />
+            </KopfKnopf>
+            {/* Nur wenn etwas offen ist: Ein Rundgang durch eine leere Liste
+                führt zu nichts. */}
+            {counts.open > 0 && (
+              <KopfKnopf label="Im Laden" onClick={() => setImLaden(true)} ton="akzent">
+                <IconCart size={20} />
+              </KopfKnopf>
+            )}
+          </>
         }
       />
 

@@ -287,3 +287,42 @@ export function neuGekauft(
       }
     })
 }
+
+/* --- Der Modus „Im Laden“ ------------------------------------------------- */
+
+/**
+ * Was der Einkaufsmodus wissen muss.
+ *
+ * Die Liste zeigt alle Abteilungen untereinander. Im Laden steht man aber in
+ * genau einer – deshalb geht der Modus sie einzeln durch und braucht dafür
+ * dreierlei: welche Abteilungen überhaupt vorkommen, wie weit der Wagen ist,
+ * und was er bisher kostet.
+ *
+ * Rein und ohne eigenen Zustand: Der Fortschritt steckt in den Einträgen
+ * selbst (`done`), nicht in einem Zähler daneben. Ein Zähler daneben liefe
+ * auseinander, sobald die andere Person zu Hause etwas von der Liste nimmt.
+ */
+export interface LadenStand {
+  /**
+   * Abteilungen mit mindestens einem Eintrag – abgehakte eingeschlossen, damit
+   * eine Abteilung nicht unter den Füßen verschwindet, während man in ihr
+   * steht und gerade das Letzte abhakt.
+   */
+  abteilungen: AisleGroup[]
+  imWagen: ShopItem[]
+  /** Summe der eingetippten Preise. Wer keinen tippt, zählt hier nicht mit. */
+  summeCents: number
+  /** Abgehakt, aber ohne Preis – die Zahl, die den Betrag unten erklärt. */
+  ohnePreis: number
+}
+
+export function ladenStand(state: Pick<State, 'shopItems' | 'aisleOrder'>): LadenStand {
+  const abteilungen = groupForShopping(state, { includeDone: true })
+  const imWagen = live(state.shopItems).filter((item) => item.done)
+  return {
+    abteilungen,
+    imWagen,
+    summeCents: imWagen.reduce((summe, item) => summe + (item.priceCents ?? 0), 0),
+    ohnePreis: imWagen.filter((item) => item.priceCents === null).length,
+  }
+}

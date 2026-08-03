@@ -236,14 +236,44 @@ statt eine Schaltfläche anzubieten, die nichts mehr täte.
 
 ---
 
+## Im Laden: eine Abteilung pro Bildschirm
+
+Die Liste zeigt alle Abteilungen untereinander. Zu Hause ist das richtig – dort
+überblickt man, was fehlt. Im Laden steht man aber in genau einer Abteilung,
+mit einer Hand am Wagen.
+
+Dafür gibt es einen zweiten Gang: **Im Laden**, oben rechts im Einkauf, sobald
+etwas offen ist. Er zeigt eine Abteilung, mit Zeilen von 76 Punkten Höhe –
+rund das Doppelte einer Listenzeile, und der Unterschied zwischen treffen und
+danebentippen, wenn man dabei läuft.
+
+- Oben ein Balken je Abteilung: erledigt, hier, kommt noch. Wie weit der
+  Rundgang ist, ohne eine Zahl zu lesen.
+- **Das Preisfeld erscheint erst nach dem Häkchen.** Das ist die Reihenfolge,
+  in der es an der Kasse passiert – vorher weiß man den Preis nicht. Tippen
+  bleibt freiwillig; die Summe unten zählt dann eben ohne diesen Posten.
+- Unten läuft mit, was im Wagen liegt und was es kostet.
+- Auf der letzten Abteilung heißt der Knopf „Einkauf fertig“.
+
+Der Modus hat keinen eigenen Fortschritts-Zähler. Was erledigt ist, steht in
+den Einträgen selbst – ein Zähler daneben liefe auseinander, sobald die andere
+Person zu Hause etwas von der Liste nimmt. Bei einer geteilten Liste ist das
+kein Sonderfall, sondern der Alltag.
+
+**Der Abschluss** nennt jetzt alle drei Dinge, die dabei passieren, und lässt
+jedes einzeln abbestellen: die Summe als Ausgabe buchen, Posten im Vorrat
+hochzählen, die Reihenfolge dieses Ladens merken. Vorher war nur die Buchung
+sichtbar, die anderen beiden passierten still – und was man nicht sieht, kann
+man auch nicht abbestellen.
+
 ## Gebaut für ein iPhone am Home-Bildschirm
 
 Die App läuft im Browser, soll aber keiner sein. Vier Dinge machen dort den
 Unterschied, und alle vier sitzen in der Leiste unten:
 
-- **Der aktive Reiter ist gefüllt, nicht nur eingefärbt.** Farbe allein trägt zu
-  wenig – bei Sonnenlicht, bei eingeschränktem Farbsehen, im Vorbeigehen. Jedes
-  der fünf Symbole gibt es deshalb doppelt, als Umriss und als Fläche.
+- **Hinter dem aktiven Symbol liegt eine Pille.** Farbe allein trägt zu wenig –
+  bei Sonnenlicht, bei eingeschränktem Farbsehen, im Vorbeigehen. Eine Fläche
+  ist ein Unterschied in der Form und wird auch ohne Farbe erkannt.
 - **Eine Haarlinie oben, keine Linie.** `1px` sind auf einem 3fach-Bildschirm
   drei Gerätepixel und damit dreimal so dick wie die Trennlinie, die iOS zieht.
 - **Kein Auswahlmenü beim Langdrücken.** Ohne `-webkit-touch-callout: none`
@@ -595,7 +625,7 @@ steht in der Monatssumme ein Cent, den niemand erklären kann.
 ```sh
 npm install
 npm run dev        # Entwicklungsserver auf Port 5173
-npm test           # 267 Tests
+npm test           # 290 Tests
 npm run typecheck
 npm run build      # Produktionsbündel nach dist/
 npm run build:single  # alles in einer HTML-Datei, nach dist-single/
@@ -645,7 +675,7 @@ supabase/
 ```
 
 Die Rechenlogik liegt vollständig in `lib/` und ist ohne Oberfläche testbar –
-alle 267 Tests laufen ohne Browser. Was in den Views steht, ist Darstellung.
+alle 290 Tests laufen ohne Browser. Was in den Views steht, ist Darstellung.
 
 ### Auf dem Telefon
 

@@ -1,48 +1,47 @@
 import { useMemo, useState } from 'react'
+import { IconCheck } from '../components/Icons'
 import { Sheet } from '../components/Sheet'
-import { today } from '../lib/date'
+import { formatDayFull, today } from '../lib/date'
 import { frequentCategories } from '../lib/finance'
 import { formatMoney } from '../lib/money'
-import { observedOrder, vorratsZugaenge } from '../lib/shopping'
-import { live } from '../lib/store'
+import { ladenStand, observedOrder, vorratsZugaenge } from '../lib/shopping'
 import { useApp } from '../lib/useApp'
 
 /**
  * Einkauf abschließen.
  *
- * Zwei Dinge passieren hier: Die App lernt aus dem Abhaken die Reihenfolge der
- * Abteilungen, und wenn Preise erfasst wurden, wird die Summe als Ausgabe
- * gebucht. So sieht man, was der Wocheneinkauf wirklich kostet, ohne den
- * Kassenzettel abzutippen.
+ * Drei Dinge passieren hier, und zwei standen bisher nicht da: Die App lernt
+ * aus dem Abhaken die Reihenfolge der Abteilungen, sie zählt den Vorrat hoch,
+ * und wenn Preise erfasst wurden, bucht sie die Summe als Ausgabe.
  *
- * Die Buchung ist freiwillig und lässt sich abwählen – nicht jeder Einkauf
- * gehört ins eigene Haushaltsbuch.
+ * Nach dem Entwurf stehen sie jetzt als drei abwählbare Zeilen untereinander.
+ * Der Unterschied ist nicht kosmetisch: Vorher war allein die Buchung sichtbar
+ * und abwählbar, die anderen beiden passierten still. Wer nicht weiß, dass
+ * etwas passiert, kann es auch nicht abbestellen.
  */
 export function AbschlussSheet({ onClose }: { onClose: () => void }) {
   const { state, dispatch } = useApp()
 
-  const done = useMemo(() => live(state.shopItems).filter((item) => item.done), [state.shopItems])
-  const priced = done.filter((item) => item.priceCents !== null)
-  const summe = priced.reduce((total, item) => total + (item.priceCents ?? 0), 0)
-
-  // Was dieser Einkauf für den Vorrat bedeutet: Bekanntes wird hochgezählt,
-  // Neues später beim Auspacken gefragt.
+  const stand = useMemo(() => ladenStand(state), [state])
+  const done = stand.imWagen
   const zugaenge = useMemo(() => vorratsZugaenge(state, done), [state, done])
 
   const categories = useMemo(() => frequentCategories(state, 'ausgabe', 99), [state])
-  const [buchen, setBuchen] = useState(summe > 0)
+  const [buchen, setBuchen] = useState(stand.summeCents > 0)
+  const [inDenVorrat, setInDenVorrat] = useState(true)
+  const [merken, setMerken] = useState(true)
   const [categoryId, setCategoryId] = useState(
     // „Lebensmittel“ ist bei einem Einkauf die weitaus häufigste Wahl.
     categories.find((c) => c.id === 'cat-lebensmittel')?.id ?? categories[0]?.id ?? '',
   )
 
   const finish = () => {
-    if (buchen && summe > 0 && categoryId) {
+    if (buchen && stand.summeCents > 0 && categoryId) {
       dispatch({
         type: 'tx/add',
         tx: {
           kind: 'ausgabe',
-          cents: summe,
+          cents: stand.summeCents,
           categoryId,
           note: 'Einkauf',
           date: today(),
@@ -50,82 +49,134 @@ export function AbschlussSheet({ onClose }: { onClose: () => void }) {
         },
       })
     }
-    // Reihenfolge lernen, den Vorrat hochzählen und Abgehaktes wegräumen.
     dispatch({
       type: 'shop/finishTrip',
-      order: observedOrder(state.shopItems),
-      inDenVorrat: zugaenge.hochzaehlen,
+      // Beides abwählbar: `finishTrip` räumt in jedem Fall auf, lernt und
+      // bucht aber nur, was hier angehakt steht.
+      order: merken ? observedOrder(state.shopItems) : [],
+      inDenVorrat: inDenVorrat ? zugaenge.hochzaehlen : [],
     })
     onClose()
   }
 
   return (
     <Sheet title="Einkauf abschließen" onClose={onClose}>
+      <p className="small muted" style={{ margin: '0 2px 14px' }}>
+        {formatDayFull(today())} · {done.length === 1 ? '1 Sache' : `${done.length} Sachen`}
+      </p>
+
       <div className="card pad" style={{ marginBottom: 14 }}>
-        <div className="tile-label">Eingekauft</div>
-        <div className="big-money">{summe > 0 ? formatMoney(summe) : `${done.length}`}</div>
-        <div className="small muted" style={{ marginTop: 4 }}>
-          {done.length === 1 ? '1 Eintrag abgehakt' : `${done.length} Einträge abgehakt`}
-          {priced.length > 0 && priced.length < done.length && ` · ${priced.length} mit Preis`}
+        <div className="tile-label">
+          {stand.summeCents > 0 ? 'Summe der eingetippten Preise' : 'Eingekauft'}
         </div>
+        <div className="big-money">
+          {stand.summeCents > 0 ? formatMoney(stand.summeCents) : String(done.length)}
+        </div>
+        {stand.ohnePreis > 0 && (
+          <div className="small muted" style={{ marginTop: 4 }}>
+            {stand.ohnePreis === 1
+              ? '1 Eintrag ohne Preis – zählt nicht mit'
+              : `${stand.ohnePreis} Einträge ohne Preis – zählen nicht mit`}
+          </div>
+        )}
       </div>
 
-      {summe > 0 ? (
-        <>
-          <button
-            type="button"
-            className={`chip${buchen ? ' chip-on' : ''}`}
-            onClick={() => setBuchen(!buchen)}
-            aria-pressed={buchen}
-          >
-            {formatMoney(summe)} als Ausgabe buchen
-          </button>
+      {/* Drei Zeilen, drei Häkchen. Was die App tut, steht da, bevor sie es
+          tut – und lässt sich einzeln abbestellen. */}
+      <div className="card">
+        {stand.summeCents > 0 && (
+          <ZeileMitHaken
+            an={buchen}
+            onToggle={() => setBuchen(!buchen)}
+            titel={`${formatMoney(stand.summeCents)} als Ausgabe buchen`}
+          />
+        )}
+        {zugaenge.hochzaehlen.length > 0 && (
+          <ZeileMitHaken
+            an={inDenVorrat}
+            onToggle={() => setInDenVorrat(!inDenVorrat)}
+            titel={
+              zugaenge.hochzaehlen.length === 1
+                ? '1 Posten im Vorrat hochzählen'
+                : `${zugaenge.hochzaehlen.length} Posten im Vorrat hochzählen`
+            }
+          />
+        )}
+        <ZeileMitHaken
+          an={merken}
+          onToggle={() => setMerken(!merken)}
+          titel="Reihenfolge dieses Ladens merken"
+        />
+      </div>
 
-          {buchen && (
-            <>
-              <span className="field-label" style={{ marginTop: 14 }}>
-                Kategorie
-              </span>
-              <div className="chips">
-                {categories.map((category) => (
-                  <button
-                    key={category.id}
-                    type="button"
-                    className={`chip${categoryId === category.id ? ' chip-on' : ''}`}
-                    onClick={() => setCategoryId(category.id)}
-                  >
-                    <span aria-hidden="true">{category.emoji}</span>
-                    {category.name}
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
+      {buchen && stand.summeCents > 0 && (
+        <>
+          <span className="field-label" style={{ marginTop: 14 }}>
+            Als Ausgabe buchen in
+          </span>
+          <div className="chips">
+            {categories.map((category) => (
+              <button
+                key={category.id}
+                type="button"
+                className={`chip${categoryId === category.id ? ' chip-on' : ''}`}
+                onClick={() => setCategoryId(category.id)}
+              >
+                <span aria-hidden="true">{category.emoji}</span>
+                {category.name}
+              </button>
+            ))}
+          </div>
         </>
-      ) : (
-        <p className="small muted">
-          Du hast keine Preise erfasst. Tipp beim Einkaufen auf das „+ €“ neben einem abgehakten
-          Eintrag, dann rechnet die App den Einkauf zusammen und bucht ihn hier.
+      )}
+
+      {stand.summeCents === 0 && (
+        <p className="small muted" style={{ marginTop: 12 }}>
+          Du hast keine Preise erfasst. Im Modus „Im Laden“ erscheint nach jedem Häkchen ein
+          Preisfeld – dann rechnet die App den Einkauf hier zusammen.
         </p>
       )}
 
       <div className="btn-row">
-        <button type="button" className="btn btn-primary btn-wide" onClick={finish}>
+        <button type="button" className="btn" onClick={onClose}>
+          Zurück
+        </button>
+        <button type="button" className="btn btn-primary" onClick={finish}>
           Abschließen
         </button>
       </div>
 
-      {/* Ohne Rückfrage, aber auch nicht heimlich: Wer wissen will, was mit
-          dem Vorrat passiert, liest es hier. An der Kasse eine Liste mit
-          Häkchen durchzugehen wäre Reibung am schlechtesten Moment. */}
       <p className="small muted" style={{ marginTop: 12 }}>
-        Abgehaktes wird von der Liste genommen. Die Reihenfolge der Abteilungen merkt sich die App
-        für den nächsten Einkauf.
-        {zugaenge.hochzaehlen.length > 0 &&
-          ` ${zugaenge.hochzaehlen.length === 1 ? '1 Posten wird' : `${zugaenge.hochzaehlen.length} Posten werden`} im Vorrat hochgezählt.`}
+        Abgehaktes wird von der Liste genommen.
         {zugaenge.neu.length > 0 &&
-          ` ${zugaenge.neu.length === 1 ? 'Ein neues Produkt wartet' : `${zugaenge.neu.length} neue Produkte warten`} im Vorrat auf dich – mit Datum, wenn du auspackst.`}
+          ` ${
+            zugaenge.neu.length === 1
+              ? 'Ein neues Produkt wartet'
+              : `${zugaenge.neu.length} neue Produkte warten`
+          } im Vorrat auf dich – mit Datum, wenn du auspackst.`}
       </p>
     </Sheet>
+  )
+}
+
+function ZeileMitHaken({ an, onToggle, titel }: { an: boolean; onToggle: () => void; titel: string }) {
+  return (
+    <button
+      type="button"
+      className="row"
+      onClick={onToggle}
+      role="checkbox"
+      aria-checked={an}
+      aria-label={titel}
+    >
+      <span className={`check${an ? ' check-on' : ''}`} aria-hidden="true">
+        <IconCheck size={15} />
+      </span>
+      <span className="row-main">
+        <span className="row-title" style={{ fontWeight: 500 }}>
+          {titel}
+        </span>
+      </span>
+    </button>
   )
 }

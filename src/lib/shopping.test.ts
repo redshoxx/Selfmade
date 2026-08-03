@@ -3,6 +3,7 @@ import {
   aisleRank,
   findExisting,
   groupForShopping,
+  ladenStand,
   neuGekauft,
   observedOrder,
   orderedAisles,
@@ -343,5 +344,76 @@ describe('neuGekauft', () => {
   it('lässt Weggeworfenes aus, das nie gekauft wurde', () => {
     // Ein gelöschter, nie abgehakter Eintrag ist kein Einkauf.
     expect(neuGekauft({ shopItems: [gekauft({ done: false })], pantryItems: [] }, 1000)).toEqual([])
+  })
+})
+
+describe('ladenStand', () => {
+  const eintrag = (over: Partial<ShopItem> = {}): ShopItem => ({
+    id: Math.random().toString(36).slice(2),
+    name: 'Milch',
+    qty: '',
+    aisle: 'kuehl',
+    done: false,
+    addedBy: 'Ich',
+    pantryId: null,
+    note: '',
+    priceCents: null,
+    updatedAt: 1,
+    deletedAt: null,
+    ...over,
+  })
+
+  it('bringt die Abteilungen in Laufrichtung', () => {
+    const stand = ladenStand({
+      shopItems: [eintrag({ aisle: 'getraenke' }), eintrag({ aisle: 'obst' })],
+      // Kleiner heißt früher: Obst zuerst.
+      aisleOrder: { obst: 0, getraenke: 9 },
+    })
+    expect(stand.abteilungen.map((g) => g.aisle.id)).toEqual(['obst', 'getraenke'])
+  })
+
+  it('behält eine Abteilung, in der alles abgehakt ist', () => {
+    // Sonst verschwände sie unter den Füßen, während man in ihr steht und
+    // gerade das Letzte abhakt.
+    const stand = ladenStand({ shopItems: [eintrag({ done: true })], aisleOrder: {} })
+    expect(stand.abteilungen).toHaveLength(1)
+    expect(stand.abteilungen[0]!.openCount).toBe(0)
+  })
+
+  it('zählt nur abgehakte Preise zusammen', () => {
+    const stand = ladenStand({
+      shopItems: [
+        eintrag({ done: true, priceCents: 179 }),
+        eintrag({ done: true, priceCents: 249 }),
+        // Nicht abgehakt: liegt noch im Regal, nicht im Wagen.
+        eintrag({ done: false, priceCents: 999 }),
+      ],
+      aisleOrder: {},
+    })
+    expect(stand.summeCents).toBe(428)
+    expect(stand.imWagen).toHaveLength(2)
+  })
+
+  it('zählt, was ohne Preis im Wagen liegt', () => {
+    const stand = ladenStand({
+      shopItems: [eintrag({ done: true, priceCents: 179 }), eintrag({ done: true })],
+      aisleOrder: {},
+    })
+    expect(stand.summeCents).toBe(179)
+    expect(stand.ohnePreis).toBe(1)
+  })
+
+  it('lässt Gelöschtes weg', () => {
+    const stand = ladenStand({
+      shopItems: [eintrag({ done: true, priceCents: 500, deletedAt: 5 })],
+      aisleOrder: {},
+    })
+    expect(stand.imWagen).toHaveLength(0)
+    expect(stand.summeCents).toBe(0)
+  })
+
+  it('kommt mit einer leeren Liste zurecht', () => {
+    const stand = ladenStand({ shopItems: [], aisleOrder: {} })
+    expect(stand).toEqual({ abteilungen: [], imWagen: [], summeCents: 0, ohnePreis: 0 })
   })
 })
